@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TierMaker2 - Create a Tier List for Anything</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .upload-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 40px;
+            color: #fff;
+        }
+        .upload-controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .upload-controls input[type=file] {
+            color: #ccc;
+        }
+        .upload-controls button {
+            background: #38bdf8;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            color: #022;
+            font-weight: 600;
+        }
+        .upload-controls button.ghost {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #ccc;
+        }
+        .upload-status {
+            font-size: 14px;
+            color: #ccc;
+            margin-bottom: 10px;
+        }
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px,1fr));
+            gap: 12px;
+        }
+        .gallery-item {
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 8px;
+            text-align: center;
+        }
+        .gallery-item img {
+            width: 100%;
+            height: 140px;
+            object-fit: cover;
+            border-radius: 6px;
+        }
+        .gallery-item button {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 6px;
+            color: #ccc;
+            margin-top: 6px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <nav class="main-navbar">
+        <div class="nav-container">
+            <div class="nav-left">
+                <a href="#" class="logo">TierMaker2</a>
+            </div>
+            <div class="nav-center">
+                <div class="search-container">
+                    <input type="text" class="search-input" placeholder="Search for a template...">
+                    <button class="search-btn">🔍</button>
+                </div>
+            </div>
+            <div class="nav-right">
+                <a href="#" class="nav-link" id="highlighted">Create a Template</a>
+                <a href="#" class="nav-link">Categories</a>
+                <button class="login-btn">Login</button>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="container">
+        <header class="main-header">
+            <h1>Tiermaker but Better</h1>
+        </header>
+
+        <main class="main-content">
+            <section class="featured-section">
+                <h3 class="featured-title">🔴 Most Voted</h3>
+                <div class="template-list">
+                    <button class="nav-arrow nav-arrow-left" disabled>‹</button>
+                    <div class="template-grid-container">
+                        <div class="template-grid">
+                            <div class="template-item">
+                                <div class="template-image">
+                                    <img src="https://shwphccglicgnyttgyrx.supabase.co/storage/v1/object/public/TierImages/uploads/1759542096516-o8j5yy.jpg" alt="May Combos">
+                                </div>
+                                <div class="template-title">Best May Combos</div>
+                            </div>
+                            <div class="template-item">
+                                <div class="template-image">
+                                    <img src="https://shwphccglicgnyttgyrx.supabase.co/storage/v1/object/public/TierImages/uploads/__may_guilty_gear_drawn_by_kekeken__sample-b01292d640cb9662eb0d09c2f051c0e0.jpg" alt="May Combos">
+                                </div>
+                                <div class="template-title">Best May Neutral</div>
+                            </div>
+                            <div class="template-item">
+                                <div class="template-image">
+                                    <img src="https://shwphccglicgnyttgyrx.supabase.co/storage/v1/object/public/TierImages/uploads/__may_guilty_gear_and_1_more_drawn_by_ky_gwangin__sample-5c24e0d474b033917b06635b963a6aa8.jpg" alt="Characters">
+                                </div>
+                                <div class="template-title">Best GGST Characters</div>
+                            </div>
+                            <div class="template-item">
+                                <div class="template-image">
+                                    <img src="https://shwphccglicgnyttgyrx.supabase.co/storage/v1/object/public/TierImages/uploads/__may_guilty_gear_and_1_more_drawn_by_itsuka_neru__sample-374ef32c723e6b1a3d92a76194f30ade.jpg" alt="May">
+                                </div>
+                                <div class="template-title">May Guilty Gear</div>
+                            </div>
+                            <div class="template-item">
+                                <div class="template-image">
+                                    <img src="https://shwphccglicgnyttgyrx.supabase.co/storage/v1/object/public/TierImages/uploads/__may_and_mr_dolphin_guilty_gear_and_1_more_drawn_by_kekeken__sample-3f4d3a6b57a1b880eef0061e85d5f021.jpg" alt="May..">
+                                </div>
+                                <div class="template-title">May...</div>
+                            </div>
+                            <div class="template-item">
+                                <div class="template-image">
+                                    <img src="https://shwphccglicgnyttgyrx.supabase.co/storage/v1/object/public/TierImages/uploads/1759541088013-doj7xr.jpg" alt="May but again">
+                                </div>
+                                <div class="template-title">May but Again</div>
+                            </div>
+                            <div class="template-item hidden">
+                                <div class="template-image">
+                                    <img src="https://shwphccglicgnyttgyrx.supabase.co/storage/v1/object/public/TierImages/uploads/1759540691432-wk9dd3.png" alt="Exta">
+                                </div>
+                                <div class="template-title">Extra</div>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="nav-arrow nav-arrow-right">›</button>
+                </div>
+            </section>
+        </main>
+
+        <footer class="main-footer">
+            <p>© 2025 tiermaker.com</p>
+        </footer>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const leftArrow = document.querySelector('.nav-arrow-left');
+            const rightArrow = document.querySelector('.nav-arrow-right');
+            const templateItems = document.querySelectorAll('.template-item');
+            let currentPage = 0;
+            const itemsPerPage = 6;
+            const totalPages = Math.ceil(templateItems.length / itemsPerPage);
+            
+            function showPage(page) {
+                templateItems.forEach((item, index) => {
+                    const pageIndex = Math.floor(index / itemsPerPage);
+                    if (pageIndex === page) item.classList.remove('hidden');
+                    else item.classList.add('hidden');
+                });
+                leftArrow.disabled = page === 0;
+                rightArrow.disabled = page === totalPages - 1;
+            }
+            
+            leftArrow.addEventListener('click', () => {
+                if (currentPage > 0) { currentPage--; showPage(currentPage); }
+            });
+            
+            rightArrow.addEventListener('click', () => {
+                if (currentPage < totalPages - 1) { currentPage++; showPage(currentPage); }
+            });
+            
+            showPage(currentPage);
+        });
+    </script>
+
+</body>
+</html>
