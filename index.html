@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tiermaker2 - Create Your Tier Lists</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Tiermaker2</h1>
+            <p>Create and share your tier lists</p>
+        </header>
+
+        <div class="controls">
+            <div class="upload-section">
+                <h3>Upload Images</h3>
+                <input type="file" id="imageUpload" accept="image/*" multiple>
+                <button id="uploadBtn">Upload to Database</button>
+                <button id="loadImagesBtn">Load My Images</button>
+            </div>
+            
+            <div class="actions">
+                <button id="clearTiers">Clear Tiers</button>
+                <button id="saveTierList">Save Tier List</button>
+                <button id="exportImage">Export as Image</button>
+            </div>
+        </div>
+
+        <div id="status" class="status-message"></div>
+
+        <div class="tier-container">
+            <div class="tier" data-tier="S">
+                <div class="tier-label" style="background-color: #ff7f7f;">S</div>
+                <div class="tier-items" id="tier-S"></div>
+            </div>
+            <div class="tier" data-tier="A">
+                <div class="tier-label" style="background-color: #ffbf7f;">A</div>
+                <div class="tier-items" id="tier-A"></div>
+            </div>
+            <div class="tier" data-tier="B">
+                <div class="tier-label" style="background-color: #ffdf7f;">B</div>
+                <div class="tier-items" id="tier-B"></div>
+            </div>
+            <div class="tier" data-tier="C">
+                <div class="tier-label" style="background-color: #ffff7f;">C</div>
+                <div class="tier-items" id="tier-C"></div>
+            </div>
+            <div class="tier" data-tier="D">
+                <div class="tier-label" style="background-color: #bfff7f;">D</div>
+                <div class="tier-items" id="tier-D"></div>
+            </div>
+            <div class="tier" data-tier="F">
+                <div class="tier-label" style="background-color: #7fbfff;">F</div>
+                <div class="tier-items" id="tier-F"></div>
+            </div>
+        </div>
+
+        <div class="unranked-section">
+            <h3>Unranked Images</h3>
+            <div class="unranked-items" id="unranked"></div>
+        </div>
+
+        <div class="firebase-setup">
+            <h3>Firebase Configuration</h3>
+            <p>To enable image storage, configure your Firebase project:</p>
+            <textarea id="firebaseConfig" placeholder='Paste your Firebase config object here:
+{
+  "apiKey": "your-api-key",
+  "authDomain": "your-project.firebaseapp.com",
+  "projectId": "your-project-id",
+  "storageBucket": "your-project.appspot.com",
+  "messagingSenderId": "123456789",
+  "appId": "your-app-id"
+}'></textarea>
+            <button id="saveFirebaseConfig">Save Configuration</button>
+        </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
