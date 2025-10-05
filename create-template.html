@@ -134,14 +134,7 @@
 
             <!-- Image Upload and Management -->
             <div class="image-management">
-                <div class="upload-section">
-                    <input type="file" id="image-upload" multiple accept="image/*" style="display: none;">
-                    <button class="upload-btn" onclick="document.getElementById('image-upload').click()">
-                        📁 Upload Images
-                    </button>
-                    <span class="upload-info">Upload images to be used in your tier list</span>
-                </div>
-                
+
                 <div class="image-pool" ondrop="drop(event)" ondragover="allowDrop(event)">
                     <div class="pool-header">
                         <h3>Image Pool</h3>
@@ -151,6 +144,14 @@
                         </div>
                     </div>
                     <div class="image-pool-container"></div>
+                </div>
+
+                <div class="upload-section">
+                    <input type="file" id="image-upload" multiple accept="image/*" style="display: none;">
+                    <button class="upload-btn" onclick="document.getElementById('image-upload').click()">
+                        📁 Upload Images
+                    </button>
+                    <span class="upload-info">Upload images to be used in your tier list</span>
                 </div>
             </div>
 
