@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Templates - TierMaker2</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="manage-templates.css">
+    <link rel="stylesheet" href="creator-styles.css">
+    <script src="github-storage.js"></script>
+</head>
+<body>
+    <nav class="main-navbar">
+        <div class="nav-container">
+            <div class="nav-left">
+                <a href="index.html" class="logo">TierMaker2</a>
+            </div>
+            <div class="nav-center">
+                <div class="search-container">
+                    <input type="text" class="search-input" placeholder="Search for a template...">
+                    <button class="search-btn">🔍</button>
+                </div>
+            </div>
+            <div class="nav-right">
+                <a href="create-template.html" class="nav-link" id="highlighted">Create a Template</a>
+                <a href="manage-templates.html" class="nav-link">My Templates</a>
+                <button id="github-login-btn" class="login-btn" style="display: block;">Login</button>
+                <div id="user-info" class="user-info" style="display: none;">
+                    <span id="username"></span>
+                    <button id="github-logout-btn" class="logout-btn">Logout</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="container">
+        <header class="main-header">
+            <h1>Manage Your Templates</h1>
+            <p>Create, edit, and delete your tier list templates</p>
+        </header>
+
+        <main class="manage-main">
+            <div class="templates-header">
+                <div class="header-left">
+                    <h2>Your Templates</h2>
+                    <span class="template-count" id="template-count">0 templates</span>
+                </div>
+                <div class="header-right">
+                    <a href="create-template.html" class="create-new-btn">➕ Create New Template</a>
+                    <button class="export-btn" onclick="exportTemplates()">📤 Export All</button>
+                    <input type="file" id="import-input" accept=".json" style="display: none;" onchange="importTemplates(event)">
+                    <button class="import-btn" onclick="document.getElementById('import-input').click()">📥 Import</button>
+                </div>
+            </div>
+
+            <div class="templates-container" id="templates-container">
+                <!-- Templates will be loaded here -->
+            </div>
+
+            <div class="empty-state" id="empty-state" style="display: none;">
+                <div class="empty-icon">📋</div>
+                <h3>No Templates Yet</h3>
+                <p>Create your first tier list template to get started!</p>
+                <a href="create-template.html" class="create-first-btn">Create Your First Template</a>
+            </div>
+        </main>
+
+        <footer class="main-footer">
+            <p>© 2025 tiermaker2.com</p>
+        </footer>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal" id="delete-modal">
+        <div class="modal-content">
+            <h3>Delete Template</h3>
+            <p>Are you sure you want to delete "<span id="delete-template-name"></span>"?</p>
+            <p class="warning-text">This action cannot be undone.</p>
+            <div class="modal-actions">
+                <button class="cancel-btn" onclick="closeDeleteModal()">Cancel</button>
+                <button class="delete-btn" onclick="confirmDelete()">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="manage-templates.js"></script>
+</body>
+</html>

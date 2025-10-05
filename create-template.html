@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Create a Template - TierMaker2</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="create-template.css">
+    <link rel="stylesheet" href="creator-styles.css">
+    <script src="github-storage.js"></script>
+</head>
+<body>
+    <nav class="main-navbar">
+        <div class="nav-container">
+            <div class="nav-left">
+                <a href="index.html" class="logo">TierMaker2</a>
+            </div>
+            <div class="nav-center">
+                <div class="search-container">
+                    <input type="text" class="search-input" placeholder="Search for a template...">
+                    <button class="search-btn">🔍</button>
+                </div>
+            </div>
+            <div class="nav-right">
+                <a href="create-template.html" class="nav-link" id="highlighted">Create a Template</a>
+                <a href="manage-templates.html" class="nav-link">My Templates</a>
+                <button id="github-login-btn" class="login-btn" style="display: block;">Login</button>
+                <div id="user-info" class="user-info" style="display: none;">
+                    <span id="username"></span>
+                    <button id="github-logout-btn" class="logout-btn">Logout</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="container">
+        <header class="main-header">
+            <h1>Create a Tier List Template</h1>
+            <p>1. Edit the label text in each row. 2. Upload images. 3. Drag the images into the order you would like. 4. Click 'Save Template'. 5. Share your Template.</p>
+        </header>
+
+        <main class="creator-main">
+            <!-- Template Name Input -->
+            <div class="template-info">
+                <input type="text" id="template-name" class="template-name-input" placeholder="Enter template name..." maxlength="100">
+                <textarea id="template-description" class="template-description-input" placeholder="Enter template description (optional)..." maxlength="500"></textarea>
+                
+                <!-- Category Selection -->
+                <div class="template-field">
+                    <label for="template-category" class="field-label">Category:</label>
+                    <select id="template-category" class="template-category-select">
+                        <option value="">Select a category (optional)</option>
+                        <option value="gaming">🎮 Gaming</option>
+                        <option value="OCs">🌟 OCs</option>
+                        <option value="movies">🎬 Movies & TV</option>
+                        <option value="music">🎵 Music</option>
+                        <option value="food">🍕 Food & Drinks</option>
+                    </select>
+                </div>
+
+                <!-- Thumbnail Selection -->
+                <div class="template-field">
+                    <label class="field-label">Template Thumbnail:</label>
+                    <div class="thumbnail-selection">
+                        <div class="thumbnail-preview">
+                            <img id="selected-thumbnail" src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='80' fill='%23666'><rect width='120' height='80'/><text x='60' y='40' text-anchor='middle' dy='.3em' fill='white' font-size='12'>No Thumbnail</text></svg>" alt="Template thumbnail">
+                        </div>
+                        <div class="thumbnail-controls">
+                            <p class="thumbnail-hint">Select an image from your uploaded images, or upload a custom thumbnail</p>
+                            <div class="thumbnail-upload-section">
+                                <input type="file" id="thumbnail-upload" accept="image/*" style="display: none;">
+                                <button type="button" id="upload-thumbnail-btn" class="thumbnail-btn">📁 Upload Custom Thumbnail</button>
+                                <button type="button" id="clear-thumbnail-btn" class="thumbnail-btn secondary">🗑️ Clear Thumbnail</button>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="sharing-options">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="share-publicly" class="share-checkbox">
+                        <span class="checkmark"></span>
+                        Share this template publicly (requires GitHub login)
+                    </label>
+                    <div id="auth-status-indicator" class="auth-indicator"></div>
+                </div>
+            </div>
+
+            <!-- Tier List Container -->
+            <div class="tier-list-container">
+                <!-- Tier Rows -->
+                <div class="tier-row" data-tier="S" data-color="#ff0000">
+                    <div class="tier-label" contenteditable="true" style="background-color: #ff0000;">S</div>
+                    <div class="tier-controls">
+                        <input type="color" class="color-picker" value="#ff0000" title="Change tier color">
+                    </div>
+                    <div class="tier-items" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+                    <div class="tier-drag-handle" title="Drag to reorder tiers">⋮⋮</div>
+                </div>
+                <div class="tier-row" data-tier="A" data-color="#ff8000">
+                    <div class="tier-label" contenteditable="true" style="background-color: #ff8000;">A</div>
+                    <div class="tier-controls">
+                        <input type="color" class="color-picker" value="#ff8000" title="Change tier color">
+                    </div>
+                    <div class="tier-items" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+                    <div class="tier-drag-handle" title="Drag to reorder tiers">⋮⋮</div>
+                </div>
+                <div class="tier-row" data-tier="B" data-color="#ffbf00">
+                    <div class="tier-label" contenteditable="true" style="background-color: #ffbf00;">B</div>
+                    <div class="tier-controls">
+                        <input type="color" class="color-picker" value="#ffbf00" title="Change tier color">
+                    </div>
+                    <div class="tier-items" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+                    <div class="tier-drag-handle" title="Drag to reorder tiers">⋮⋮</div>
+                </div>
+                <div class="tier-row" data-tier="C" data-color="#ffff00">
+                    <div class="tier-label" contenteditable="true" style="background-color: #ffff00;">C</div>
+                    <div class="tier-controls">
+                        <input type="color" class="color-picker" value="#ffff00" title="Change tier color">
+                    </div>
+                    <div class="tier-items" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+                    <div class="tier-drag-handle" title="Drag to reorder tiers">⋮⋮</div>
+                </div>
+                <div class="tier-row" data-tier="D" data-color="#00ff00">
+                    <div class="tier-label" contenteditable="true" style="background-color: #00ff00;">D</div>
+                    <div class="tier-controls">
+                        <input type="color" class="color-picker" value="#00ff00" title="Change tier color">
+                    </div>
+                    <div class="tier-items" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+                    <div class="tier-drag-handle" title="Drag to reorder tiers">⋮⋮</div>
+                </div>
+            </div>
+
+            <!-- Image Upload and Management -->
+            <div class="image-management">
+                <div class="upload-section">
+                    <input type="file" id="image-upload" multiple accept="image/*" style="display: none;">
+                    <button class="upload-btn" onclick="document.getElementById('image-upload').click()">
+                        📁 Upload Images
+                    </button>
+                    <span class="upload-info">Upload images to be used in your tier list</span>
+                </div>
+                
+                <div class="image-pool" ondrop="drop(event)" ondragover="allowDrop(event)">
+                    <div class="pool-header">
+                        <h3>Image Pool</h3>
+                        <div class="pool-controls">
+                            <button class="control-btn" onclick="clearAllImages()">🗑️ Clear All</button>
+                            <button class="control-btn" onclick="randomizeImages()">🎲 Randomize</button>
+                        </div>
+                    </div>
+                    <div class="image-pool-container"></div>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="controls">
+                <div class="left-controls">
+                    <button class="control-btn" onclick="addTierRow()">➕ Add Tier</button>
+                    <button class="control-btn" onclick="removeTierRow()">➖ Remove Tier</button>
+                    <button class="control-btn" onclick="resetTierList()">🔄 Reset</button>
+                </div>
+                
+                <div class="center-controls">
+                    
+                    <select id="sort-options" class="sort-select">
+                        <option value="default">Default Order</option>
+                        <option value="alphabetical">Alphabetical</option>
+                        <option value="reverse">Reverse Order</option>
+                        <option value="newest">Newest to Oldest</option>
+                        <option value="oldest">Oldest to Newest</option>
+                    </select>
+                </div>
+                
+                <div class="right-controls">
+                    <button class="save-btn" onclick="saveTemplate()">✅ Save Template</button>
+                </div>
+            </div>
+        </main>
+
+        <footer class="main-footer">
+            <p>© 2025 tiermaker2.com</p>
+        </footer>
+    </div>
+
+    <script src="tier-list-creator.js"></script>
+</body>
+</html>
