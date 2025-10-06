@@ -1200,7 +1200,9 @@ async function saveTemplate() {
     if (sharePublicly) {
         try {
             showMessage('Saving template publicly...', 'info');
-            await githubStorage.saveTemplate(currentTemplate);
+            // Set the public flag on the template before saving
+            const publicTemplate = { ...currentTemplate, public: true, isPublic: true };
+            await githubStorage.saveTemplate(publicTemplate);
             showMessage('Template saved locally and publicly!', 'success');
         } catch (error) {
             console.error('Error saving public template:', error);

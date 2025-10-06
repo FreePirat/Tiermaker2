@@ -90,14 +90,15 @@ class GitHubStorage {
         // For demo purposes, we'll use a manual token input
         // In production, you'd use proper OAuth flow
         const token = prompt(
-            'To contribute templates to this community platform, please enter a GitHub Personal Access Token.\n\n' +
+            'To save templates publicly, please enter a GitHub Personal Access Token.\n\n' +
             '⚠️ IMPORTANT: Your token needs these permissions:\n' +
-            '• public_repo (to write to public repositories)\n' +
-            '• Contents: Write (to create/update files)\n\n' +
+            '• gist (to create GitHub Gists for templates)\n' +
+            '• public_repo (optional, for direct repository access)\n\n' +
             '📝 Create token at: https://github.com/settings/tokens\n' +
             '1. Click "Generate new token (classic)"\n' +
-            '2. Select scope: "public_repo"\n' +
+            '2. Select scopes: "gist" (and optionally "public_repo")\n' +
             '3. Copy the token here\n\n' +
+            'Templates will be saved as GitHub Gists, making them accessible to everyone!\n\n' +
             '🔒 Note: Token is stored locally in your browser only\n\n' +
             'Token:'
         );
@@ -106,17 +107,19 @@ class GitHubStorage {
             this.accessToken = token;
             const isValid = await this.validateToken();
             if (isValid) {
-                // Test repository access specifically
+                localStorage.setItem('github_token', token);
+                this.authenticated = true;
+                this.currentUser = await this.getCurrentUser();
+                
+                // Test repository access (optional for Gist-based templates)
                 const hasRepoAccess = await this.testRepositoryAccess();
                 if (hasRepoAccess) {
-                    localStorage.setItem('github_token', token);
-                    this.authenticated = true;
-                    this.currentUser = await this.getCurrentUser();
-                    return true;
+                    console.log('Repository access confirmed - can save directly to repository');
                 } else {
-                    alert('Token validation passed, but cannot access repository. Please ensure your token has "public_repo" scope and try again.');
-                    return false;
+                    console.log('No repository access - will use Gists for public templates');
                 }
+                
+                return true;
             } else {
                 alert('Invalid token. Please check your token and try again.');
                 return false;
@@ -202,6 +205,89 @@ class GitHubStorage {
             }
         }
 
+        // For public templates, we'll use GitHub Gists instead of the main repository
+        // This allows any authenticated user to save templates without needing repository access
+        if (template.public || template.isPublic) {
+            return await this.saveTemplateAsGist(template);
+        }
+
+        // For private templates, save to the main repository (only works for repository collaborators)
+        return await this.saveTemplateToRepository(template);
+    }
+
+    // Save template as a GitHub Gist (accessible to all authenticated users)
+    async saveTemplateAsGist(template) {
+        const templateData = {
+            ...template,
+            createdAt: template.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            public: true,
+            creator: this.currentUser ? {
+                username: this.currentUser.login,
+                avatarUrl: this.currentUser.avatar_url,
+                profileUrl: this.currentUser.html_url
+            } : null
+        };
+
+        const gistData = {
+            description: `TierMaker2 Template: ${template.name}`,
+            public: true,
+            files: {
+                [`${template.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${template.id}.json`]: {
+                    content: JSON.stringify(templateData, null, 2)
+                }
+            }
+        };
+
+        try {
+            const response = await fetch(`${this.apiBase}/gists`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `token ${this.accessToken}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(gistData)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                let errorMessage = `GitHub API error: ${errorData.message}`;
+                
+                if (response.status === 403) {
+                    errorMessage = 'Permission denied: Your GitHub token needs "gist" scope to save templates. Please create a new token with the correct permissions.';
+                } else if (response.status === 401) {
+                    errorMessage = 'Authentication failed: Your GitHub token may be invalid or expired. Please log out and log in again.';
+                }
+                
+                throw new Error(errorMessage);
+            }
+
+            const gistResult = await response.json();
+            
+            // Store the gist information for later retrieval
+            const gistInfo = {
+                templateId: template.id,
+                gistId: gistResult.id,
+                gistUrl: gistResult.html_url,
+                createdAt: gistResult.created_at,
+                updatedAt: gistResult.updated_at
+            };
+            
+            // Store gist mapping in localStorage for this user
+            const userGists = JSON.parse(localStorage.getItem('user_template_gists') || '{}');
+            userGists[template.id] = gistInfo;
+            localStorage.setItem('user_template_gists', JSON.stringify(userGists));
+
+            return gistResult;
+        } catch (error) {
+            console.error('Error saving template as gist:', error);
+            throw error;
+        }
+    }
+
+    // Save template to repository (original method, for repository collaborators only)
+    async saveTemplateToRepository(template) {
         const filename = `${template.id}.json`;
         const filePath = `${this.templatesPath}/${filename}`;
         
@@ -273,14 +359,18 @@ class GitHubStorage {
                 // Provide specific guidance for common errors
                 if (response.status === 403) {
                     if (errorData.message.includes('Resource not accessible')) {
-                        errorMessage = 'Permission denied: Your GitHub token needs "public_repo" scope to save templates. Please create a new token with the correct permissions.';
+                        errorMessage = 'Permission denied: You need to be a repository collaborator to save templates directly. Templates will be saved as GitHub Gists instead.';
+                        // Fallback to gist saving
+                        return await this.saveTemplateAsGist(template);
                     } else if (errorData.message.includes('API rate limit')) {
                         errorMessage = 'GitHub API rate limit exceeded. Please try again later.';
                     }
                 } else if (response.status === 401) {
                     errorMessage = 'Authentication failed: Your GitHub token may be invalid or expired. Please log out and log in again.';
                 } else if (response.status === 404) {
-                    errorMessage = 'Repository not found: Cannot access the template storage repository.';
+                    errorMessage = 'Repository not found: Saving template as GitHub Gist instead.';
+                    // Fallback to gist saving
+                    return await this.saveTemplateAsGist(template);
                 }
                 
                 console.error('GitHub API Error Details:', {
