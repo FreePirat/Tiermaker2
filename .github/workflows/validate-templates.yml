@@ -148,7 +148,7 @@ jobs:
           echo "✅ PR #${{ github.event.pull_request.number }} successfully merged!"
         else
           echo "⚠️ Auto-merge failed due to permissions. Adding ready-to-merge label..."
-          gh pr edit ${{ github.event.pull_request.number }} --add-label "auto-validated,ready-to-merge"
+          gh pr edit ${{ github.event.pull_request.number }} --add-label "ready-to-merge"
           
           gh pr comment ${{ github.event.pull_request.number }} --body "🤖 **Automated validation completed successfully!** ✅
 
@@ -170,7 +170,7 @@ jobs:
       if: env.VALIDATION_PASSED == 'true' && env.SAFE_CHANGES == 'true'
       run: |
         # Add labels to indicate validation passed
-        gh pr edit ${{ github.event.pull_request.number }} --add-label "validation-passed,auto-merged"
+  gh pr edit ${{ github.event.pull_request.number }} --add-label "validation-passed"
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
