@@ -20,37 +20,49 @@ jobs:
     - name: Checkout PR
       uses: actions/checkout@v4
       with:
-        ref: ${{ github.event.pull_request.head.sha }}
+        fetch-depth: 0
 
     - name: Get changed files
       id: changed-files
-      uses: tj-actions/changed-files@v44
-      with:
-        files: |
-          templates/*.json
-        files_ignore: |
-          !templates/*.json
-
-    - name: Check safe changes
       run: |
-        echo "Changed files: ${{ steps.changed-files.outputs.all_changed_files }}"
-        echo "Template files changed: ${{ steps.changed-files.outputs.any_changed }}"
-        echo "Non-template files changed: ${{ steps.changed-files.outputs.other_changed_files }}"
+        # Get the base branch
+        git fetch origin ${{ github.event.pull_request.base.ref }}
         
-        # Check if only template files changed
-        if [[ "${{ steps.changed-files.outputs.other_changed_files }}" != "" ]]; then
-          echo "❌ Non-template files detected: ${{ steps.changed-files.outputs.other_changed_files }}"
+        # Get changed files using GitHub API instead of git
+        echo "Getting changed files from GitHub API..."
+        
+        # Use GitHub CLI to get PR files
+        gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files[].path' > all_changed_files.txt
+        
+        echo "All changed files:"
+        cat all_changed_files.txt
+        
+        # Filter for template files
+        grep '^templates/.*\.json$' all_changed_files.txt > template_files.txt || touch template_files.txt
+        
+        # Check for non-template files
+        grep -v '^templates/.*\.json$' all_changed_files.txt > non_template_files.txt || touch non_template_files.txt
+        
+        # Set environment variables
+        if [[ -s non_template_files.txt ]]; then
+          echo "❌ Non-template files detected:"
+          cat non_template_files.txt
           echo "SAFE_CHANGES=false" >> $GITHUB_ENV
         else
           echo "✅ Only template files changed"
           echo "SAFE_CHANGES=true" >> $GITHUB_ENV
         fi
         
-        # Save changed template files for validation
-        echo "${{ steps.changed-files.outputs.all_changed_files }}" > changed_files.txt
+        if [[ -s template_files.txt ]]; then
+          echo "TEMPLATE_FILES_CHANGED=true" >> $GITHUB_ENV
+        else
+          echo "TEMPLATE_FILES_CHANGED=false" >> $GITHUB_ENV
+        fi
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Validate template files
-      if: steps.changed-files.outputs.any_changed == 'true'
+      if: env.TEMPLATE_FILES_CHANGED == 'true'
       run: |
         echo "Validating template submissions..."
         valid=true
@@ -59,7 +71,7 @@ jobs:
         sudo apt-get update && sudo apt-get install -y jq
         
         # Process each changed template file
-        for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
+        while IFS= read -r file; do
           echo "Validating $file"
           
           # Check if file exists
@@ -116,7 +128,7 @@ jobs:
           fi
           
           echo "✅ File $file is valid"
-        done
+        done < template_files.txt
         
         if [[ "$valid" == "true" ]]; then
           echo "✅ All template files are valid"
