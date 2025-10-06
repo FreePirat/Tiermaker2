@@ -101,15 +101,15 @@ class GitHubStorage {
         // For demo purposes, we'll use a manual token input
         // In production, you'd use proper OAuth flow
         const token = prompt(
-            'To save templates publicly, please enter a GitHub Personal Access Token.\n\n' +
+            'To submit templates to the community, please enter a GitHub Personal Access Token.\n\n' +
             '⚠️ REQUIRED: Your token needs this permission:\n' +
-            '• gist (to create GitHub Gists for your templates)\n\n' +
+            '• public_repo (to create template submission issues)\n\n' +
             '📝 Create token at: https://github.com/settings/tokens\n' +
             '1. Click "Generate new token (classic)"\n' +
-            '2. Select ONLY the "gist" scope\n' +
+            '2. Select "public_repo" scope\n' +
             '3. Click "Generate token"\n' +
             '4. Copy the token and paste it below\n\n' +
-            '✨ Your templates will be saved as public GitHub Gists!\n' +
+            '✨ Your templates will be submitted as GitHub Issues for review!\n' +
             '🔒 Token is stored locally in your browser only\n\n' +
             'Token:'
         );
@@ -199,7 +199,7 @@ class GitHubStorage {
         }
     }
 
-    // Save template to GitHub
+    // Save template to GitHub via Issues (works with GitHub Pages)
     async saveTemplate(template) {
         if (!this.authenticated) {
             const loggedIn = await this.login();
@@ -208,14 +208,124 @@ class GitHubStorage {
             }
         }
 
-        // For public templates, we'll use GitHub Gists instead of the main repository
-        // This allows any authenticated user to save templates without needing repository access
+        // For public templates, create a GitHub Issue instead of direct file creation
+        // This works perfectly with GitHub Pages and doesn't require repository write access
         if (template.public || template.isPublic) {
-            return await this.saveTemplateAsGist(template);
+            return await this.saveTemplateAsIssue(template);
         }
 
-        // For private templates, save to the main repository (only works for repository collaborators)
-        return await this.saveTemplateToRepository(template);
+        // For private templates, still try Gist approach
+        return await this.saveTemplateAsGist(template);
+    }
+
+    // Save template as a GitHub Issue (works from GitHub Pages)
+    async saveTemplateAsIssue(template) {
+        console.log('Creating GitHub Issue for template:', template.name);
+        
+        const templateData = {
+            ...template,
+            createdAt: template.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            public: true,
+            creator: this.currentUser ? {
+                username: this.currentUser.login,
+                avatarUrl: this.currentUser.avatar_url,
+                profileUrl: this.currentUser.html_url
+            } : null
+        };
+
+        // Create the issue content
+        const issueTitle = `[TEMPLATE] ${template.name}`;
+        const issueBody = `## TierMaker2 Template Submission
+
+**Template Name:** ${template.name}
+**Category:** ${template.category || 'Uncategorized'}
+**Description:** ${template.description || 'No description provided'}
+**Created by:** @${this.currentUser?.login || 'Anonymous'}
+
+### Template Data
+\`\`\`json
+${JSON.stringify(templateData, null, 2)}
+\`\`\`
+
+---
+*This template was submitted via TierMaker2. Repository maintainers can review and add it to the templates collection.*`;
+
+        const issueData = {
+            title: issueTitle,
+            body: issueBody,
+            labels: ['template-submission', 'community']
+        };
+
+        try {
+            console.log('Creating GitHub Issue for template submission...');
+            
+            const response = await fetch(`https://api.github.com/repos/${this.owner}/${this.repo}/issues`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.accessToken}`,
+                    'Accept': 'application/vnd.github+json',
+                    'Content-Type': 'application/json',
+                    'X-GitHub-Api-Version': '2022-11-28',
+                    'User-Agent': 'TierMaker2-App'
+                },
+                body: JSON.stringify(issueData)
+            });
+
+            console.log('GitHub Issues API response status:', response.status);
+
+            if (!response.ok) {
+                let errorData;
+                try {
+                    errorData = await response.json();
+                } catch (parseError) {
+                    console.error('Could not parse error response:', parseError);
+                    throw new Error(`GitHub API error ${response.status}: ${response.statusText}`);
+                }
+                
+                console.error('GitHub Issues API error details:', errorData);
+                
+                let errorMessage = `GitHub API error: ${errorData.message || response.statusText}`;
+                
+                if (response.status === 403) {
+                    errorMessage = 'Permission denied: Please make sure you have a valid GitHub token.';
+                } else if (response.status === 401) {
+                    errorMessage = 'Authentication failed: Your GitHub token may be invalid or expired.';
+                } else if (response.status === 404) {
+                    errorMessage = 'Repository not found: Cannot access the TierMaker2 repository for submissions.';
+                } else if (response.status === 422) {
+                    errorMessage = `Invalid data: ${errorData.message || 'Please check your template data and try again.'}`;
+                }
+                
+                throw new Error(errorMessage);
+            }
+
+            const issueResult = await response.json();
+            console.log('Template submission issue created:', issueResult.html_url);
+            
+            // Store the issue information
+            const submissionInfo = {
+                templateId: template.id,
+                issueNumber: issueResult.number,
+                issueUrl: issueResult.html_url,
+                createdAt: issueResult.created_at,
+                status: 'submitted'
+            };
+            
+            // Store submission info in localStorage
+            const userSubmissions = JSON.parse(localStorage.getItem('user_template_submissions') || '{}');
+            userSubmissions[template.id] = submissionInfo;
+            localStorage.setItem('user_template_submissions', JSON.stringify(userSubmissions));
+
+            return {
+                success: true,
+                issueUrl: issueResult.html_url,
+                message: 'Template submitted successfully! Repository maintainers will review and add it to the collection.'
+            };
+        } catch (error) {
+            console.error('Error submitting template via issue:', error);
+            throw error;
+        }
     }
 
     // Save template as a GitHub Gist (accessible to all authenticated users)

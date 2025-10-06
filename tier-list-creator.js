@@ -1199,13 +1199,19 @@ async function saveTemplate() {
     // Save publicly if requested
     if (sharePublicly) {
         try {
-            showMessage('Saving template publicly...', 'info');
+            showMessage('Submitting template to community...', 'info');
             // Set the public flag on the template before saving
             const publicTemplate = { ...currentTemplate, public: true, isPublic: true };
-            await githubStorage.saveTemplate(publicTemplate);
-            showMessage('Template saved locally and publicly!', 'success');
+            const result = await githubStorage.saveTemplate(publicTemplate);
+            
+            if (result && result.success) {
+                showMessage('Template saved locally and submitted to community! Check the GitHub issue for status.', 'success');
+                console.log('Template submission URL:', result.issueUrl);
+            } else {
+                showMessage('Template saved locally and submitted to community!', 'success');
+            }
         } catch (error) {
-            console.error('Error saving public template:', error);
+            console.error('Error submitting template:', error);
             
             // If this is a CORS or GitHub Pages issue, offer alternative
             if (error.message.includes('CORS') || error.message.includes('GitHub Pages') || error.message.includes('alternative')) {
@@ -1237,10 +1243,10 @@ async function saveTemplate() {
                     
                     showMessage('Template saved locally and downloaded! Upload to GitHub Gist manually to share.', 'success');
                 } else {
-                    showMessage('Template saved locally, but failed to save publicly: ' + error.message, 'warning');
+                    showMessage('Template saved locally, but failed to submit publicly: ' + error.message, 'warning');
                 }
             } else {
-                showMessage('Template saved locally, but failed to save publicly: ' + error.message, 'warning');
+                showMessage('Template saved locally, but failed to submit publicly: ' + error.message, 'warning');
             }
         }
     } else {
