@@ -33,13 +33,24 @@ class GitHubStorage {
         if (!this.accessToken) return false;
         
         try {
+            console.log('Validating GitHub token...');
             const response = await fetch(`${this.apiBase}/user`, {
                 headers: {
                     'Authorization': `token ${this.accessToken}`,
                     'Accept': 'application/vnd.github.v3+json'
                 }
             });
-            return response.ok;
+            
+            console.log('Token validation response status:', response.status);
+            
+            if (response.ok) {
+                const user = await response.json();
+                console.log('Token validated successfully for user:', user.login);
+                return true;
+            } else {
+                console.error('Token validation failed:', response.status, response.statusText);
+                return false;
+            }
         } catch (error) {
             console.error('Token validation failed:', error);
             return false;
@@ -232,6 +243,8 @@ class GitHubStorage {
         };
 
         try {
+            console.log('Creating GitHub Gist with data:', gistData);
+            
             const response = await fetch(`${this.apiBase}/gists`, {
                 method: 'POST',
                 headers: {
@@ -242,20 +255,29 @@ class GitHubStorage {
                 body: JSON.stringify(gistData)
             });
 
+            console.log('GitHub Gist API response status:', response.status);
+
             if (!response.ok) {
                 const errorData = await response.json();
+                console.error('GitHub Gist API error details:', errorData);
+                
                 let errorMessage = `GitHub API error: ${errorData.message}`;
                 
                 if (response.status === 403) {
                     errorMessage = 'Permission denied: Your GitHub token needs "gist" scope to save templates. Please create a new token with the correct permissions.';
                 } else if (response.status === 401) {
                     errorMessage = 'Authentication failed: Your GitHub token may be invalid or expired. Please log out and log in again.';
+                } else if (response.status === 404) {
+                    errorMessage = 'GitHub API endpoint not found. This might be a temporary GitHub issue or your token may not have the correct permissions.';
+                } else if (response.status === 422) {
+                    errorMessage = 'Invalid data sent to GitHub. Please check your template data and try again.';
                 }
                 
                 throw new Error(errorMessage);
             }
 
             const gistResult = await response.json();
+            console.log('GitHub Gist created successfully:', gistResult.html_url);
             
             // Store the gist information for later retrieval
             const gistInfo = {
