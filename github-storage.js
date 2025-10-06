@@ -308,7 +308,14 @@ class GitHubStorage {
 - **Number of tiers:** ${template.tiers?.length || 0}
 - **Template ID:** ${template.id}
 
-This template has been automatically submitted via TierMaker2. Please review and merge if appropriate.
+This template has been automatically submitted via TierMaker2 and will be auto-merged if validation passes.
+
+### Auto-merge Criteria
+✅ Valid JSON structure
+✅ Required fields present (id, name, images, tiers)
+✅ Template ID matches filename
+✅ Within size limits (≤1000 images, ≤50 tiers, ≤10MB)
+✅ Only adds new template files
 
 ---
 *Submitted via TierMaker2 template creator*`;
@@ -340,6 +347,27 @@ This template has been automatically submitted via TierMaker2. Please review and
 
         const pr = await response.json();
         console.log('Pull Request created:', pr.html_url);
+        
+        // Add labels to the PR for easier tracking
+        try {
+            await fetch(
+                `${this.apiBase}/repos/${this.owner}/${this.repo}/issues/${pr.number}/labels`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `token ${this.accessToken}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(['template-submission', 'auto-merge-candidate'])
+                }
+            );
+            console.log('Labels added to PR');
+        } catch (labelError) {
+            console.warn('Could not add labels to PR:', labelError);
+            // Non-critical, continue anyway
+        }
+        
         return pr;
     }
 

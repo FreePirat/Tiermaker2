@@ -1,0 +1,177 @@
+name: Auto-merge Template Submissions
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - 'templates/*.json'
+
+jobs:
+  validate-and-merge:
+    runs-on: ubuntu-latest
+    if: startsWith(github.event.pull_request.title, 'Add template:')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Get changed files
+      id: changed-files
+      uses: tj-actions/changed-files@v40
+      with:
+        files: templates/*.json
+
+    - name: Validate template files
+      run: |
+        echo "Validating template submissions..."
+        valid=true
+        
+        for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
+          echo "Validating $file"
+          
+          # Check if file exists and is in templates directory
+          if [[ ! "$file" =~ ^templates/.*\.json$ ]]; then
+            echo "❌ File $file is not in templates directory or not a JSON file"
+            valid=false
+            continue
+          fi
+          
+          # Validate JSON structure
+          if ! jq empty "$file" 2>/dev/null; then
+            echo "❌ File $file is not valid JSON"
+            valid=false
+            continue
+          fi
+          
+          # Check required template fields
+          if ! jq -e '.id and .name and .images and .tiers' "$file" >/dev/null; then
+            echo "❌ File $file missing required template fields (id, name, images, tiers)"
+            valid=false
+            continue
+          fi
+          
+          # Check template ID matches filename
+          template_id=$(jq -r '.id' "$file")
+          filename=$(basename "$file" .json)
+          if [[ "$template_id" != "$filename" ]]; then
+            echo "❌ Template ID ($template_id) doesn't match filename ($filename)"
+            valid=false
+            continue
+          fi
+          
+          # Check for reasonable limits
+          image_count=$(jq '.images | length' "$file")
+          if [[ $image_count -gt 1000 ]]; then
+            echo "❌ Template has too many images ($image_count > 1000)"
+            valid=false
+            continue
+          fi
+          
+          tier_count=$(jq '.tiers | length' "$file")
+          if [[ $tier_count -gt 50 ]]; then
+            echo "❌ Template has too many tiers ($tier_count > 50)"
+            valid=false
+            continue
+          fi
+          
+          # Check file size (should be reasonable)
+          file_size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file")
+          if [[ $file_size -gt 10485760 ]]; then  # 10MB limit
+            echo "❌ Template file too large (${file_size} bytes > 10MB)"
+            valid=false
+            continue
+          fi
+          
+          echo "✅ File $file is valid"
+        done
+        
+        if [[ "$valid" == "true" ]]; then
+          echo "✅ All template files are valid"
+          echo "VALIDATION_PASSED=true" >> $GITHUB_ENV
+        else
+          echo "❌ Validation failed"
+          echo "VALIDATION_PASSED=false" >> $GITHUB_ENV
+        fi
+
+    - name: Check for only template additions
+      run: |
+        echo "Checking that PR only adds template files..."
+        
+        # Get all changed files (not just templates)
+        all_changed=$(git diff --name-only origin/${{ github.event.pull_request.base.ref }}...HEAD)
+        
+        valid=true
+        for file in $all_changed; do
+          if [[ ! "$file" =~ ^templates/.*\.json$ ]]; then
+            echo "❌ PR contains non-template file: $file"
+            valid=false
+          fi
+        done
+        
+        # Check that files are only additions, not modifications
+        modified_files=$(git diff --name-only --diff-filter=M origin/${{ github.event.pull_request.base.ref }}...HEAD)
+        if [[ -n "$modified_files" ]]; then
+          echo "❌ PR modifies existing files: $modified_files"
+          valid=false
+        fi
+        
+        if [[ "$valid" == "true" ]]; then
+          echo "✅ PR only adds new template files"
+          echo "SAFE_CHANGES=true" >> $GITHUB_ENV
+        else
+          echo "❌ PR contains unsafe changes"
+          echo "SAFE_CHANGES=false" >> $GITHUB_ENV
+        fi
+
+    - name: Auto-approve and merge
+      if: env.VALIDATION_PASSED == 'true' && env.SAFE_CHANGES == 'true'
+      run: |
+        echo "All validations passed. Auto-merging PR..."
+        
+        # Use GitHub CLI to approve and merge
+        gh pr review ${{ github.event.pull_request.number }} --approve --body "✅ Automated approval: Template validation passed"
+        gh pr merge ${{ github.event.pull_request.number }} --squash --delete-branch
+        
+        echo "✅ PR #${{ github.event.pull_request.number }} has been automatically merged"
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Comment on validation failure
+      if: env.VALIDATION_PASSED == 'false' || env.SAFE_CHANGES == 'false'
+      run: |
+        comment="❌ **Automatic merge failed**\n\n"
+        
+        if [[ "${{ env.VALIDATION_PASSED }}" == "false" ]]; then
+          comment+="**Template validation failed.** Please check that your template:\n"
+          comment+="- Is valid JSON\n"
+          comment+="- Contains required fields: id, name, images, tiers\n"
+          comment+="- Has template ID matching the filename\n"
+          comment+="- Doesn't exceed size limits (1000 images, 50 tiers, 10MB file)\n\n"
+        fi
+        
+        if [[ "${{ env.SAFE_CHANGES }}" == "false" ]]; then
+          comment+="**Unsafe changes detected.** This PR:\n"
+          comment+="- Should only add new template JSON files\n"
+          comment+="- Should not modify existing files\n"
+          comment+="- Should only touch the templates/ directory\n\n"
+        fi
+        
+        comment+="Please fix these issues and push updates to this PR for re-validation."
+        
+        gh pr comment ${{ github.event.pull_request.number }} --body "$comment"
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Add success comment
+      if: env.VALIDATION_PASSED == 'true' && env.SAFE_CHANGES == 'true'
+      run: |
+        gh pr comment ${{ github.event.pull_request.number }} --body "🎉 **Template successfully merged!** Your template has been automatically validated and added to the TierMaker2 collection. Thank you for your contribution!"
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
