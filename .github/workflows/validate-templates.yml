@@ -138,27 +138,12 @@ jobs:
           echo "VALIDATION_PASSED=false" >> $GITHUB_ENV
         fi
 
-    - name: Auto-approve and merge on success
+    - name: Merge validated template
       if: env.VALIDATION_PASSED == 'true' && env.SAFE_CHANGES == 'true'
       run: |
-        echo "All validations passed. Auto-approving and merging..."
+        echo "All validations passed. Merging template..."
         
-        # Add approval review
-        gh pr review ${{ github.event.pull_request.number }} --approve --body "✅ **Automated validation passed!**
-
-        All template validation checks have passed:
-        - ✅ Valid JSON structure
-        - ✅ Required fields present  
-        - ✅ Template ID matches filename
-        - ✅ Within size limits
-        - ✅ Safe changes only
-
-        This PR has been automatically approved and will be merged."
-        
-        # Wait a moment for the review to register
-        sleep 2
-        
-        # Merge the PR directly
+        # Merge the PR directly (validation serves as approval)
         gh pr merge ${{ github.event.pull_request.number }} --squash --delete-branch
         
         echo "✅ PR #${{ github.event.pull_request.number }} successfully merged!"
