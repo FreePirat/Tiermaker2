@@ -1208,12 +1208,6 @@ async function saveTemplate() {
                 showMessage('Template saved locally and submitted as Pull Request! 🎉', 'success');
                 if (result.pullRequestUrl) {
                     console.log('Pull Request URL:', result.pullRequestUrl);
-                    // Optionally show the PR URL to the user
-                    setTimeout(() => {
-                        if (confirm('Template submitted successfully!\n\nWould you like to view the Pull Request?')) {
-                            window.open(result.pullRequestUrl, '_blank');
-                        }
-                    }, 2000);
                 }
             } else {
                 showMessage('Template saved locally and submitted to repository!', 'success');
