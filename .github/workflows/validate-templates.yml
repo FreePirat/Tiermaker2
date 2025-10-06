@@ -138,15 +138,30 @@ jobs:
           echo "VALIDATION_PASSED=false" >> $GITHUB_ENV
         fi
 
-    - name: Enable auto-merge on success
+    - name: Auto-approve and merge on success
       if: env.VALIDATION_PASSED == 'true' && env.SAFE_CHANGES == 'true'
       run: |
-        echo "All validations passed. Enabling auto-merge..."
+        echo "All validations passed. Auto-approving and merging..."
         
-        # Enable auto-merge for this PR
-        gh pr merge ${{ github.event.pull_request.number }} --squash --auto
+        # Add approval review
+        gh pr review ${{ github.event.pull_request.number }} --approve --body "✅ **Automated validation passed!**
+
+        All template validation checks have passed:
+        - ✅ Valid JSON structure
+        - ✅ Required fields present  
+        - ✅ Template ID matches filename
+        - ✅ Within size limits
+        - ✅ Safe changes only
+
+        This PR has been automatically approved and will be merged."
         
-        echo "✅ Auto-merge enabled for PR #${{ github.event.pull_request.number }}"
+        # Wait a moment for the review to register
+        sleep 2
+        
+        # Merge the PR directly
+        gh pr merge ${{ github.event.pull_request.number }} --squash --delete-branch
+        
+        echo "✅ PR #${{ github.event.pull_request.number }} successfully merged!"
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -154,7 +169,7 @@ jobs:
       if: env.VALIDATION_PASSED == 'true' && env.SAFE_CHANGES == 'true'
       run: |
         # Add labels to indicate validation passed
-        gh pr edit ${{ github.event.pull_request.number }} --add-label "validation-passed,ready-to-merge"
+        gh pr edit ${{ github.event.pull_request.number }} --add-label "validation-passed,auto-merged"
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -190,6 +205,17 @@ jobs:
     - name: Add success comment
       if: env.VALIDATION_PASSED == 'true' && env.SAFE_CHANGES == 'true'
       run: |
-        gh pr comment ${{ github.event.pull_request.number }} --body "🎉 **Template validation passed!** ✅\n\nYour template has been automatically validated and **auto-merge has been enabled**. The PR will be automatically merged once all required checks pass.\n\n**Validation Results:**\n- ✅ Valid JSON structure\n- ✅ Required fields present\n- ✅ Template ID matches filename\n- ✅ Within size limits\n- ✅ Safe changes only\n\nThank you for your contribution to TierMaker2! 🚀"
+        gh pr comment ${{ github.event.pull_request.number }} --body "🎉 **Template validation passed and PR merged!** ✅
+
+        Your template has been automatically validated and **successfully merged** into the main repository!
+
+        **Validation Results:**
+        - ✅ Valid JSON structure
+        - ✅ Required fields present
+        - ✅ Template ID matches filename
+        - ✅ Within size limits
+        - ✅ Safe changes only
+
+        Your template is now live and available to all TierMaker2 users! Thank you for your contribution! 🚀"
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
