@@ -91,15 +91,15 @@ class GitHubStorage {
         // In production, you'd use proper OAuth flow
         const token = prompt(
             'To save templates publicly, please enter a GitHub Personal Access Token.\n\n' +
-            '⚠️ IMPORTANT: Your token needs these permissions:\n' +
-            '• gist (to create GitHub Gists for templates)\n' +
-            '• public_repo (optional, for direct repository access)\n\n' +
+            '⚠️ REQUIRED: Your token needs this permission:\n' +
+            '• gist (to create GitHub Gists for your templates)\n\n' +
             '📝 Create token at: https://github.com/settings/tokens\n' +
             '1. Click "Generate new token (classic)"\n' +
-            '2. Select scopes: "gist" (and optionally "public_repo")\n' +
-            '3. Copy the token here\n\n' +
-            'Templates will be saved as GitHub Gists, making them accessible to everyone!\n\n' +
-            '🔒 Note: Token is stored locally in your browser only\n\n' +
+            '2. Select ONLY the "gist" scope\n' +
+            '3. Click "Generate token"\n' +
+            '4. Copy the token and paste it below\n\n' +
+            '✨ Your templates will be saved as public GitHub Gists!\n' +
+            '🔒 Token is stored locally in your browser only\n\n' +
             'Token:'
         );
         
@@ -110,15 +110,7 @@ class GitHubStorage {
                 localStorage.setItem('github_token', token);
                 this.authenticated = true;
                 this.currentUser = await this.getCurrentUser();
-                
-                // Test repository access (optional for Gist-based templates)
-                const hasRepoAccess = await this.testRepositoryAccess();
-                if (hasRepoAccess) {
-                    console.log('Repository access confirmed - can save directly to repository');
-                } else {
-                    console.log('No repository access - will use Gists for public templates');
-                }
-                
+                console.log('Authentication successful - templates will be saved as GitHub Gists');
                 return true;
             } else {
                 alert('Invalid token. Please check your token and try again.');
