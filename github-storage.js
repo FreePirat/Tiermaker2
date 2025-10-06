@@ -220,6 +220,63 @@ class GitHubStorage {
 
     // Save template as a GitHub Gist (accessible to all authenticated users)
     async saveTemplateAsGist(template) {
+        console.log('Starting Gist creation for template:', template.name);
+        
+        // First, let's test if we can create a simple gist
+        const testGistData = {
+            description: "TierMaker2 Test",
+            public: true,
+            files: {
+                "test.txt": {
+                    content: "This is a test gist from TierMaker2"
+                }
+            }
+        };
+
+        // Test basic gist creation first
+        try {
+            console.log('Testing basic Gist creation...');
+            const testResponse = await fetch(`${this.apiBase}/gists`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `token ${this.accessToken}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(testGistData)
+            });
+
+            console.log('Test Gist response status:', testResponse.status);
+
+            if (!testResponse.ok) {
+                const testError = await testResponse.json();
+                console.error('Test Gist creation failed:', testError);
+                throw new Error(`Gist creation test failed: ${testError.message}`);
+            }
+
+            const testResult = await testResponse.json();
+            console.log('Test Gist created successfully:', testResult.html_url);
+            
+            // Delete the test gist to clean up
+            try {
+                await fetch(`${this.apiBase}/gists/${testResult.id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `token ${this.accessToken}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                });
+                console.log('Test Gist cleaned up');
+            } catch (cleanupError) {
+                console.warn('Could not clean up test gist:', cleanupError);
+            }
+
+        } catch (testError) {
+            console.error('Basic Gist creation test failed:', testError);
+            throw new Error(`Cannot create Gists with your token: ${testError.message}`);
+        }
+
+        // If test passed, create the actual template gist
         const templateData = {
             ...template,
             createdAt: template.createdAt || new Date().toISOString(),
@@ -232,18 +289,23 @@ class GitHubStorage {
             } : null
         };
 
+        // Create a safe filename
+        const safeTemplateName = template.name.replace(/[^a-z0-9\s]/gi, '').replace(/\s+/g, '_').toLowerCase();
+        const filename = `tiermaker2_${safeTemplateName}_${template.id}.json`;
+
         const gistData = {
             description: `TierMaker2 Template: ${template.name}`,
             public: true,
             files: {
-                [`${template.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${template.id}.json`]: {
+                [filename]: {
                     content: JSON.stringify(templateData, null, 2)
                 }
             }
         };
 
         try {
-            console.log('Creating GitHub Gist with data:', gistData);
+            console.log('Creating template Gist with filename:', filename);
+            console.log('Gist data:', gistData);
             
             const response = await fetch(`${this.apiBase}/gists`, {
                 method: 'POST',
@@ -255,11 +317,11 @@ class GitHubStorage {
                 body: JSON.stringify(gistData)
             });
 
-            console.log('GitHub Gist API response status:', response.status);
+            console.log('Template Gist API response status:', response.status);
 
             if (!response.ok) {
                 const errorData = await response.json();
-                console.error('GitHub Gist API error details:', errorData);
+                console.error('Template Gist API error details:', errorData);
                 
                 let errorMessage = `GitHub API error: ${errorData.message}`;
                 
@@ -277,7 +339,7 @@ class GitHubStorage {
             }
 
             const gistResult = await response.json();
-            console.log('GitHub Gist created successfully:', gistResult.html_url);
+            console.log('Template Gist created successfully:', gistResult.html_url);
             
             // Store the gist information for later retrieval
             const gistInfo = {
