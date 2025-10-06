@@ -1,4 +1,4 @@
-name: Auto-merge Template Submissions
+name: Validate Template Submissions
 
 on:
   pull_request:
@@ -7,12 +7,12 @@ on:
       - 'templates/*.json'
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: write
   issues: write
 
 jobs:
-  validate-and-merge:
+  validate-template:
     runs-on: ubuntu-latest
     if: startsWith(github.event.pull_request.title, 'Add template:')
     
@@ -20,26 +20,14 @@ jobs:
     - name: Checkout PR
       uses: actions/checkout@v4
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
         ref: ${{ github.event.pull_request.head.sha }}
-
-    - name: Checkout base branch
-      uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        ref: ${{ github.event.pull_request.base.ref }}
-        path: base
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
 
     - name: Get changed files
       id: changed-files
       run: |
         # Get list of changed files
-        git diff --name-only HEAD^ HEAD > changed_files.txt
+        git fetch origin ${{ github.event.pull_request.base.ref }}
+        git diff --name-only origin/${{ github.event.pull_request.base.ref }}...HEAD > changed_files.txt
         echo "Changed files:"
         cat changed_files.txt
         
@@ -51,11 +39,6 @@ jobs:
           echo "Only template files changed"
           echo "SAFE_CHANGES=true" >> $GITHUB_ENV
         fi
-        
-        # Store changed files for later use
-        echo "CHANGED_FILES<<EOF" >> $GITHUB_ENV
-        cat changed_files.txt >> $GITHUB_ENV
-        echo "EOF" >> $GITHUB_ENV
 
     - name: Validate template files
       run: |
@@ -132,47 +115,58 @@ jobs:
           echo "VALIDATION_PASSED=false" >> $GITHUB_ENV
         fi
 
-    - name: Auto-merge PR
+    - name: Enable auto-merge on success
       if: env.VALIDATION_PASSED == 'true' && env.SAFE_CHANGES == 'true'
       run: |
-        echo "All validations passed. Auto-merging PR..."
+        echo "All validations passed. Enabling auto-merge..."
         
-        # Use GitHub CLI to merge without approval (since we can't approve our own PR)
-        gh pr merge ${{ github.event.pull_request.number }} --squash --auto --delete-branch
+        # Enable auto-merge for this PR
+        gh pr merge ${{ github.event.pull_request.number }} --squash --auto
         
-        echo "✅ PR #${{ github.event.pull_request.number }} has been set to auto-merge"
+        echo "✅ Auto-merge enabled for PR #${{ github.event.pull_request.number }}"
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Add validation labels
+      if: env.VALIDATION_PASSED == 'true' && env.SAFE_CHANGES == 'true'
+      run: |
+        # Add labels to indicate validation passed
+        gh pr edit ${{ github.event.pull_request.number }} --add-label "validation-passed,ready-to-merge"
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Comment on validation failure
       if: env.VALIDATION_PASSED == 'false' || env.SAFE_CHANGES == 'false'
       run: |
-        comment="❌ **Automatic merge failed**\n\n"
+        comment="❌ **Template validation failed**\n\n"
         
         if [[ "${{ env.VALIDATION_PASSED }}" == "false" ]]; then
-          comment+="**Template validation failed.** Please check that your template:\n"
-          comment+="- Is valid JSON\n"
-          comment+="- Contains required fields: id, name, images, tiers\n"
-          comment+="- Has template ID matching the filename\n"
-          comment+="- Doesn't exceed size limits (1000 images, 50 tiers, 10MB file)\n\n"
+          comment+="**Template validation errors detected.** Please check that your template:\n"
+          comment+="- ✅ Is valid JSON\n"
+          comment+="- ✅ Contains required fields: id, name, images, tiers\n"
+          comment+="- ✅ Has template ID matching the filename\n"
+          comment+="- ✅ Doesn't exceed size limits (1000 images, 50 tiers, 10MB file)\n\n"
         fi
         
         if [[ "${{ env.SAFE_CHANGES }}" == "false" ]]; then
           comment+="**Unsafe changes detected.** This PR:\n"
-          comment+="- Should only add new template JSON files\n"
-          comment+="- Should not modify existing files\n"
-          comment+="- Should only touch the templates/ directory\n\n"
+          comment+="- ✅ Should only add new template JSON files\n"
+          comment+="- ✅ Should not modify existing files\n"
+          comment+="- ✅ Should only touch the templates/ directory\n\n"
         fi
         
         comment+="Please fix these issues and push updates to this PR for re-validation."
         
         gh pr comment ${{ github.event.pull_request.number }} --body "$comment"
+        
+        # Add failure label
+        gh pr edit ${{ github.event.pull_request.number }} --add-label "validation-failed"
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Add success comment
       if: env.VALIDATION_PASSED == 'true' && env.SAFE_CHANGES == 'true'
       run: |
-        gh pr comment ${{ github.event.pull_request.number }} --body "🎉 **Template validation passed!** Your template has been automatically validated and queued for merge. It will be merged automatically once all checks complete. Thank you for your contribution!"
+        gh pr comment ${{ github.event.pull_request.number }} --body "🎉 **Template validation passed!** ✅\n\nYour template has been automatically validated and **auto-merge has been enabled**. The PR will be automatically merged once all required checks pass.\n\n**Validation Results:**\n- ✅ Valid JSON structure\n- ✅ Required fields present\n- ✅ Template ID matches filename\n- ✅ Within size limits\n- ✅ Safe changes only\n\nThank you for your contribution to TierMaker2! 🚀"
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
