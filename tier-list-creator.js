@@ -1206,7 +1206,42 @@ async function saveTemplate() {
             showMessage('Template saved locally and publicly!', 'success');
         } catch (error) {
             console.error('Error saving public template:', error);
-            showMessage('Template saved locally, but failed to save publicly: ' + error.message, 'warning');
+            
+            // If this is a CORS or GitHub Pages issue, offer alternative
+            if (error.message.includes('CORS') || error.message.includes('GitHub Pages') || error.message.includes('alternative')) {
+                const useAlternative = confirm(
+                    'GitHub Pages cannot access GitHub API directly for public sharing.\n\n' +
+                    'Would you like to download your template as a JSON file instead?\n' +
+                    'You can then manually create a GitHub Gist to share it.\n\n' +
+                    'Click OK to download, or Cancel to continue.'
+                );
+                
+                if (useAlternative) {
+                    // Download the template as JSON
+                    const templateData = {
+                        ...currentTemplate,
+                        createdAt: currentTemplate.createdAt || new Date().toISOString(),
+                        public: true,
+                        creator: null // No creator info since not saved via API
+                    };
+                    
+                    const blob = new Blob([JSON.stringify(templateData, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `tiermaker2_${currentTemplate.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${currentTemplate.id}.json`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                    
+                    showMessage('Template saved locally and downloaded! Upload to GitHub Gist manually to share.', 'success');
+                } else {
+                    showMessage('Template saved locally, but failed to save publicly: ' + error.message, 'warning');
+                }
+            } else {
+                showMessage('Template saved locally, but failed to save publicly: ' + error.message, 'warning');
+            }
         }
     } else {
         showMessage('Template saved locally!', 'success');

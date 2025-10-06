@@ -222,61 +222,6 @@ class GitHubStorage {
     async saveTemplateAsGist(template) {
         console.log('Starting Gist creation for template:', template.name);
         
-        // First, let's test if we can create a simple gist
-        const testGistData = {
-            description: "TierMaker2 Test",
-            public: true,
-            files: {
-                "test.txt": {
-                    content: "This is a test gist from TierMaker2"
-                }
-            }
-        };
-
-        // Test basic gist creation first
-        try {
-            console.log('Testing basic Gist creation...');
-            const testResponse = await fetch(`${this.apiBase}/gists`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `token ${this.accessToken}`,
-                    'Accept': 'application/vnd.github.v3+json',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(testGistData)
-            });
-
-            console.log('Test Gist response status:', testResponse.status);
-
-            if (!testResponse.ok) {
-                const testError = await testResponse.json();
-                console.error('Test Gist creation failed:', testError);
-                throw new Error(`Gist creation test failed: ${testError.message}`);
-            }
-
-            const testResult = await testResponse.json();
-            console.log('Test Gist created successfully:', testResult.html_url);
-            
-            // Delete the test gist to clean up
-            try {
-                await fetch(`${this.apiBase}/gists/${testResult.id}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': `token ${this.accessToken}`,
-                        'Accept': 'application/vnd.github.v3+json'
-                    }
-                });
-                console.log('Test Gist cleaned up');
-            } catch (cleanupError) {
-                console.warn('Could not clean up test gist:', cleanupError);
-            }
-
-        } catch (testError) {
-            console.error('Basic Gist creation test failed:', testError);
-            throw new Error(`Cannot create Gists with your token: ${testError.message}`);
-        }
-
-        // If test passed, create the actual template gist
         const templateData = {
             ...template,
             createdAt: template.createdAt || new Date().toISOString(),
@@ -305,34 +250,48 @@ class GitHubStorage {
 
         try {
             console.log('Creating template Gist with filename:', filename);
-            console.log('Gist data:', gistData);
             
-            const response = await fetch(`${this.apiBase}/gists`, {
+            // Try with different headers and approach for GitHub Pages compatibility
+            const response = await fetch('https://api.github.com/gists', {
                 method: 'POST',
                 headers: {
-                    'Authorization': `token ${this.accessToken}`,
-                    'Accept': 'application/vnd.github.v3+json',
-                    'Content-Type': 'application/json'
+                    'Authorization': `Bearer ${this.accessToken}`, // Try Bearer instead of token
+                    'Accept': 'application/vnd.github+json',
+                    'Content-Type': 'application/json',
+                    'X-GitHub-Api-Version': '2022-11-28',
+                    'User-Agent': 'TierMaker2-App'
                 },
                 body: JSON.stringify(gistData)
             });
 
             console.log('Template Gist API response status:', response.status);
+            console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
             if (!response.ok) {
-                const errorData = await response.json();
+                let errorData;
+                try {
+                    errorData = await response.json();
+                } catch (parseError) {
+                    // If we can't parse the error response, it might be a CORS issue
+                    console.error('Could not parse error response:', parseError);
+                    if (response.status === 0 || response.type === 'opaque') {
+                        throw new Error('CORS error: GitHub Pages cannot access GitHub API directly. Please try running locally or use a different hosting solution.');
+                    }
+                    throw new Error(`GitHub API error ${response.status}: ${response.statusText}`);
+                }
+                
                 console.error('Template Gist API error details:', errorData);
                 
-                let errorMessage = `GitHub API error: ${errorData.message}`;
+                let errorMessage = `GitHub API error: ${errorData.message || response.statusText}`;
                 
                 if (response.status === 403) {
                     errorMessage = 'Permission denied: Your GitHub token needs "gist" scope to save templates. Please create a new token with the correct permissions.';
                 } else if (response.status === 401) {
                     errorMessage = 'Authentication failed: Your GitHub token may be invalid or expired. Please log out and log in again.';
                 } else if (response.status === 404) {
-                    errorMessage = 'GitHub API endpoint not found. This might be a temporary GitHub issue or your token may not have the correct permissions.';
+                    errorMessage = 'GitHub API endpoint not found. This might be due to GitHub Pages CORS restrictions or token issues.';
                 } else if (response.status === 422) {
-                    errorMessage = 'Invalid data sent to GitHub. Please check your template data and try again.';
+                    errorMessage = `Invalid data: ${errorData.message || 'Please check your template data and try again.'}`;
                 }
                 
                 throw new Error(errorMessage);
@@ -358,6 +317,17 @@ class GitHubStorage {
             return gistResult;
         } catch (error) {
             console.error('Error saving template as gist:', error);
+            
+            // If this is a CORS or network error, provide alternative solution
+            if (error.message.includes('CORS') || error.message.includes('fetch')) {
+                const alternativeMessage = 'GitHub Pages has restrictions on API access. As an alternative:\n\n' +
+                    '1. Download your template using the "Download JSON" button\n' +
+                    '2. Create a manual GitHub Gist at https://gist.github.com\n' +
+                    '3. Upload your template JSON file to share it publicly\n\n' +
+                    'Or run TierMaker2 locally (not on GitHub Pages) for full API access.';
+                throw new Error(alternativeMessage);
+            }
+            
             throw error;
         }
     }
