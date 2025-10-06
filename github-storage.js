@@ -57,59 +57,18 @@ class GitHubStorage {
         }
     }
 
-    // Test repository access specifically
-    async testRepositoryAccess() {
-        if (!this.accessToken) return false;
-        
-        try {
-            // Try to access the repository
-            const response = await fetch(`${this.apiBase}/repos/${this.owner}/${this.repo}`, {
-                headers: {
-                    'Authorization': `token ${this.accessToken}`,
-                    'Accept': 'application/vnd.github.v3+json'
-                }
-            });
-            
-            if (!response.ok) {
-                console.error('Repository access test failed:', response.status, response.statusText);
-                return false;
-            }
-            
-            const repo = await response.json();
-            console.log('Repository access successful:', repo.full_name);
-            
-            // Check if we can access the contents (this tests write permissions indirectly)
-            const contentsResponse = await fetch(
-                `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/`,
-                {
-                    headers: {
-                        'Authorization': `token ${this.accessToken}`,
-                        'Accept': 'application/vnd.github.v3+json'
-                    }
-                }
-            );
-            
-            return contentsResponse.ok;
-        } catch (error) {
-            console.error('Repository access test failed:', error);
-            return false;
-        }
-    }
-
     // GitHub OAuth login (simplified for GitHub Pages)
     async login() {
-        // For demo purposes, we'll use a manual token input
-        // In production, you'd use proper OAuth flow
         const token = prompt(
-            'To submit templates to the community, please enter a GitHub Personal Access Token.\n\n' +
+            'To contribute templates to the TierMaker2 repository, please enter a GitHub Personal Access Token.\n\n' +
             '⚠️ REQUIRED: Your token needs this permission:\n' +
-            '• public_repo (to create template submission issues)\n\n' +
+            '• public_repo (to fork repositories and create pull requests)\n\n' +
             '📝 Create token at: https://github.com/settings/tokens\n' +
             '1. Click "Generate new token (classic)"\n' +
             '2. Select "public_repo" scope\n' +
             '3. Click "Generate token"\n' +
             '4. Copy the token and paste it below\n\n' +
-            '✨ Your templates will be submitted as GitHub Issues for review!\n' +
+            '✨ Your template will be submitted as a Pull Request to the main repository!\n' +
             '🔒 Token is stored locally in your browser only\n\n' +
             'Token:'
         );
@@ -129,6 +88,27 @@ class GitHubStorage {
             }
         }
         return false;
+    }
+
+    // Get current user
+    async getCurrentUser() {
+        if (!this.accessToken) return null;
+        
+        try {
+            const response = await fetch(`${this.apiBase}/user`, {
+                headers: {
+                    'Authorization': `token ${this.accessToken}`,
+                    'Accept': 'application/vnd.github.v3+json'
+                }
+            });
+            
+            if (response.ok) {
+                return await response.json();
+            }
+        } catch (error) {
+            console.error('Error getting current user:', error);
+        }
+        return null;
     }
 
     // Logout
@@ -180,26 +160,7 @@ class GitHubStorage {
         }
     }
 
-    // Get templates created by the current authenticated user
-    async getUserTemplates() {
-        if (!this.authenticated || !this.currentUser) {
-            return [];
-        }
-
-        try {
-            const allTemplates = await this.getPublicTemplates();
-            // Filter templates created by the current user
-            return allTemplates.filter(template => 
-                template.creator && 
-                template.creator.username === this.currentUser.login
-            );
-        } catch (error) {
-            console.error('Error fetching user templates:', error);
-            return [];
-        }
-    }
-
-    // Save template to GitHub via Issues (works with GitHub Pages)
+    // Save template to GitHub via Fork + Pull Request (standard open source workflow)
     async saveTemplate(template) {
         if (!this.authenticated) {
             const loggedIn = await this.login();
@@ -208,129 +169,183 @@ class GitHubStorage {
             }
         }
 
-        // For public templates, create a GitHub Issue instead of direct file creation
-        // This works perfectly with GitHub Pages and doesn't require repository write access
+        // For public templates, create a fork and submit PR
         if (template.public || template.isPublic) {
-            return await this.saveTemplateAsIssue(template);
+            return await this.saveTemplateViaPR(template);
         }
 
-        // For private templates, still try Gist approach
-        return await this.saveTemplateAsGist(template);
+        // For private templates, keep local only
+        return { success: true, local: true };
     }
 
-    // Save template as a GitHub Issue (works from GitHub Pages)
-    async saveTemplateAsIssue(template) {
-        console.log('Creating GitHub Issue for template:', template.name);
+    // Save template via Fork + Pull Request workflow
+    async saveTemplateViaPR(template) {
+        console.log('Starting template submission via Fork + PR for:', template.name);
         
-        const templateData = {
-            ...template,
-            createdAt: template.createdAt || new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            public: true,
-            creator: this.currentUser ? {
-                username: this.currentUser.login,
-                avatarUrl: this.currentUser.avatar_url,
-                profileUrl: this.currentUser.html_url
-            } : null
+        try {
+            // Step 1: Fork the repository
+            console.log('Step 1: Creating fork...');
+            const fork = await this.createFork();
+            
+            // Step 2: Create the template file in the fork
+            console.log('Step 2: Adding template to fork...');
+            const filename = `${template.id}.json`;
+            const templateData = {
+                ...template,
+                createdAt: template.createdAt || new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                public: true,
+                creator: this.currentUser ? {
+                    username: this.currentUser.login,
+                    avatarUrl: this.currentUser.avatar_url,
+                    profileUrl: this.currentUser.html_url
+                } : null
+            };
+            
+            await this.createFileInFork(filename, templateData, fork.owner.login);
+            
+            // Step 3: Create Pull Request
+            console.log('Step 3: Creating Pull Request...');
+            const pr = await this.createPullRequest(template, fork.owner.login);
+            
+            return {
+                success: true,
+                pullRequestUrl: pr.html_url,
+                message: 'Template submitted successfully! Your Pull Request is under review.'
+            };
+            
+        } catch (error) {
+            console.error('Error in Fork + PR workflow:', error);
+            
+            // If fork/PR fails, provide helpful instructions
+            if (error.message.includes('fork') || error.message.includes('repository')) {
+                throw new Error(
+                    'Unable to create fork. Please:\n' +
+                    '1. Make sure your GitHub token has "public_repo" scope\n' +
+                    '2. Try manually forking FreePirat/Tiermaker2 first\n' +
+                    '3. Then save your template again'
+                );
+            }
+            
+            throw error;
+        }
+    }
+
+    // Create a fork of the main repository
+    async createFork() {
+        const response = await fetch(`${this.apiBase}/repos/${this.owner}/${this.repo}/forks`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `token ${this.accessToken}`,
+                'Accept': 'application/vnd.github.v3+json',
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            if (response.status === 403) {
+                throw new Error('Permission denied: Your GitHub token needs "public_repo" scope to fork repositories.');
+            }
+            const errorData = await response.json();
+            throw new Error(`Failed to create fork: ${errorData.message}`);
+        }
+
+        const fork = await response.json();
+        console.log('Fork created successfully:', fork.html_url);
+        
+        // Wait a moment for the fork to be ready
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        return fork;
+    }
+
+    // Create template file in the user's fork
+    async createFileInFork(filename, templateData, forkOwner) {
+        const filePath = `${this.templatesPath}/${filename}`;
+        const content = btoa(JSON.stringify(templateData, null, 2));
+        
+        const commitData = {
+            message: `Add template: ${templateData.name}`,
+            content: content,
+            branch: this.branch
         };
 
-        // Create the issue content
-        const issueTitle = `[TEMPLATE] ${template.name}`;
-        const issueBody = `## TierMaker2 Template Submission
+        const response = await fetch(
+            `${this.apiBase}/repos/${forkOwner}/${this.repo}/contents/${filePath}`,
+            {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `token ${this.accessToken}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(commitData)
+            }
+        );
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Failed to create template file: ${errorData.message}`);
+        }
+
+        const result = await response.json();
+        console.log('Template file created in fork:', result.content.html_url);
+        return result;
+    }
+
+    // Create Pull Request from fork to main repository
+    async createPullRequest(template, forkOwner) {
+        const prTitle = `Add template: ${template.name}`;
+        const prBody = `## New Template Submission
 
 **Template Name:** ${template.name}
 **Category:** ${template.category || 'Uncategorized'}
 **Description:** ${template.description || 'No description provided'}
 **Created by:** @${this.currentUser?.login || 'Anonymous'}
 
-### Template Data
-\`\`\`json
-${JSON.stringify(templateData, null, 2)}
-\`\`\`
+### Template Details
+- **Number of images:** ${template.images?.length || 0}
+- **Number of tiers:** ${template.tiers?.length || 0}
+- **Template ID:** ${template.id}
+
+This template has been automatically submitted via TierMaker2. Please review and merge if appropriate.
 
 ---
-*This template was submitted via TierMaker2. Repository maintainers can review and add it to the templates collection.*`;
+*Submitted via TierMaker2 template creator*`;
 
-        const issueData = {
-            title: issueTitle,
-            body: issueBody,
-            labels: ['template-submission', 'community']
+        const prData = {
+            title: prTitle,
+            body: prBody,
+            head: `${forkOwner}:${this.branch}`,
+            base: this.branch
         };
 
-        try {
-            console.log('Creating GitHub Issue for template submission...');
-            
-            const response = await fetch(`https://api.github.com/repos/${this.owner}/${this.repo}/issues`, {
+        const response = await fetch(
+            `${this.apiBase}/repos/${this.owner}/${this.repo}/pulls`,
+            {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${this.accessToken}`,
-                    'Accept': 'application/vnd.github+json',
-                    'Content-Type': 'application/json',
-                    'X-GitHub-Api-Version': '2022-11-28',
-                    'User-Agent': 'TierMaker2-App'
+                    'Authorization': `token ${this.accessToken}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(issueData)
-            });
-
-            console.log('GitHub Issues API response status:', response.status);
-
-            if (!response.ok) {
-                let errorData;
-                try {
-                    errorData = await response.json();
-                } catch (parseError) {
-                    console.error('Could not parse error response:', parseError);
-                    throw new Error(`GitHub API error ${response.status}: ${response.statusText}`);
-                }
-                
-                console.error('GitHub Issues API error details:', errorData);
-                
-                let errorMessage = `GitHub API error: ${errorData.message || response.statusText}`;
-                
-                if (response.status === 403) {
-                    errorMessage = 'Permission denied: Please make sure you have a valid GitHub token.';
-                } else if (response.status === 401) {
-                    errorMessage = 'Authentication failed: Your GitHub token may be invalid or expired.';
-                } else if (response.status === 404) {
-                    errorMessage = 'Repository not found: Cannot access the TierMaker2 repository for submissions.';
-                } else if (response.status === 422) {
-                    errorMessage = `Invalid data: ${errorData.message || 'Please check your template data and try again.'}`;
-                }
-                
-                throw new Error(errorMessage);
+                body: JSON.stringify(prData)
             }
+        );
 
-            const issueResult = await response.json();
-            console.log('Template submission issue created:', issueResult.html_url);
-            
-            // Store the issue information
-            const submissionInfo = {
-                templateId: template.id,
-                issueNumber: issueResult.number,
-                issueUrl: issueResult.html_url,
-                createdAt: issueResult.created_at,
-                status: 'submitted'
-            };
-            
-            // Store submission info in localStorage
-            const userSubmissions = JSON.parse(localStorage.getItem('user_template_submissions') || '{}');
-            userSubmissions[template.id] = submissionInfo;
-            localStorage.setItem('user_template_submissions', JSON.stringify(userSubmissions));
-
-            return {
-                success: true,
-                issueUrl: issueResult.html_url,
-                message: 'Template submitted successfully! Repository maintainers will review and add it to the collection.'
-            };
-        } catch (error) {
-            console.error('Error submitting template via issue:', error);
-            throw error;
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Failed to create Pull Request: ${errorData.message}`);
         }
+
+        const pr = await response.json();
+        console.log('Pull Request created:', pr.html_url);
+        return pr;
     }
 
     // Save template as a GitHub Gist (accessible to all authenticated users)
     async saveTemplateAsGist(template) {
-        console.log('Starting Gist creation for template:', template.name);
+        console.log('Creating GitHub Gist for template:', template.name);
         
         const templateData = {
             ...template,
@@ -349,7 +364,7 @@ ${JSON.stringify(templateData, null, 2)}
         const filename = `tiermaker2_${safeTemplateName}_${template.id}.json`;
 
         const gistData = {
-            description: `TierMaker2 Template: ${template.name}`,
+            description: `TierMaker2 Template: ${template.name} (Category: ${template.category || 'Uncategorized'})`,
             public: true,
             files: {
                 [filename]: {
@@ -361,36 +376,27 @@ ${JSON.stringify(templateData, null, 2)}
         try {
             console.log('Creating template Gist with filename:', filename);
             
-            // Try with different headers and approach for GitHub Pages compatibility
-            const response = await fetch('https://api.github.com/gists', {
+            const response = await fetch(`${this.apiBase}/gists`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${this.accessToken}`, // Try Bearer instead of token
-                    'Accept': 'application/vnd.github+json',
-                    'Content-Type': 'application/json',
-                    'X-GitHub-Api-Version': '2022-11-28',
-                    'User-Agent': 'TierMaker2-App'
+                    'Authorization': `token ${this.accessToken}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(gistData)
             });
 
-            console.log('Template Gist API response status:', response.status);
-            console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+            console.log('GitHub Gist API response status:', response.status);
 
             if (!response.ok) {
                 let errorData;
                 try {
                     errorData = await response.json();
+                    console.error('GitHub Gist API error details:', errorData);
                 } catch (parseError) {
-                    // If we can't parse the error response, it might be a CORS issue
                     console.error('Could not parse error response:', parseError);
-                    if (response.status === 0 || response.type === 'opaque') {
-                        throw new Error('CORS error: GitHub Pages cannot access GitHub API directly. Please try running locally or use a different hosting solution.');
-                    }
                     throw new Error(`GitHub API error ${response.status}: ${response.statusText}`);
                 }
-                
-                console.error('Template Gist API error details:', errorData);
                 
                 let errorMessage = `GitHub API error: ${errorData.message || response.statusText}`;
                 
@@ -399,7 +405,7 @@ ${JSON.stringify(templateData, null, 2)}
                 } else if (response.status === 401) {
                     errorMessage = 'Authentication failed: Your GitHub token may be invalid or expired. Please log out and log in again.';
                 } else if (response.status === 404) {
-                    errorMessage = 'GitHub API endpoint not found. This might be due to GitHub Pages CORS restrictions or token issues.';
+                    errorMessage = 'GitHub API endpoint not found. Please check your internet connection and try again.';
                 } else if (response.status === 422) {
                     errorMessage = `Invalid data: ${errorData.message || 'Please check your template data and try again.'}`;
                 }
@@ -424,34 +430,25 @@ ${JSON.stringify(templateData, null, 2)}
             userGists[template.id] = gistInfo;
             localStorage.setItem('user_template_gists', JSON.stringify(userGists));
 
-            return gistResult;
+            return {
+                success: true,
+                gistUrl: gistResult.html_url,
+                message: 'Template saved as GitHub Gist successfully!'
+            };
         } catch (error) {
             console.error('Error saving template as gist:', error);
-            
-            // If this is a CORS or network error, provide alternative solution
-            if (error.message.includes('CORS') || error.message.includes('fetch')) {
-                const alternativeMessage = 'GitHub Pages has restrictions on API access. As an alternative:\n\n' +
-                    '1. Download your template using the "Download JSON" button\n' +
-                    '2. Create a manual GitHub Gist at https://gist.github.com\n' +
-                    '3. Upload your template JSON file to share it publicly\n\n' +
-                    'Or run TierMaker2 locally (not on GitHub Pages) for full API access.';
-                throw new Error(alternativeMessage);
-            }
-            
             throw error;
         }
     }
 
-    // Save template to repository (original method, for repository collaborators only)
-    async saveTemplateToRepository(template) {
-        const filename = `${template.id}.json`;
-        const filePath = `${this.templatesPath}/${filename}`;
+    // Get user's own templates from GitHub
+    async getUserTemplates() {
+        if (!this.authenticated) return [];
         
-        // Check if file exists
-        let sha = null;
         try {
-            const existingResponse = await fetch(
-                `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${filePath}`,
+            // Get templates that user has created in this repository (if they have access)
+            const response = await fetch(
+                `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${this.templatesPath}`,
                 {
                     headers: {
                         'Authorization': `token ${this.accessToken}`,
@@ -460,338 +457,90 @@ ${JSON.stringify(templateData, null, 2)}
                 }
             );
             
-            if (existingResponse.ok) {
-                const existingFile = await existingResponse.json();
-                sha = existingFile.sha;
-            }
-        } catch (error) {
-            // File doesn't exist, that's okay
-        }
-
-        // Prepare template data with creator information
-        const templateData = {
-            ...template,
-            createdAt: template.createdAt || new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            public: true,
-            creator: this.currentUser ? {
-                username: this.currentUser.login,
-                avatarUrl: this.currentUser.avatar_url,
-                profileUrl: this.currentUser.html_url
-            } : null
-        };
-
-        const content = btoa(JSON.stringify(templateData, null, 2));
-        
-        const creatorInfo = this.currentUser ? ` by @${this.currentUser.login}` : '';
-        const commitData = {
-            message: sha ? `Update template: ${template.name}${creatorInfo}` : `Add template: ${template.name}${creatorInfo}`,
-            content: content,
-            branch: this.branch
-        };
-        
-        if (sha) {
-            commitData.sha = sha;
-        }
-
-        try {
-            const response = await fetch(
-                `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${filePath}`,
-                {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `token ${this.accessToken}`,
-                        'Accept': 'application/vnd.github.v3+json',
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(commitData)
-                }
-            );
-
             if (!response.ok) {
-                const errorData = await response.json();
-                let errorMessage = `GitHub API error: ${errorData.message}`;
-                
-                // Provide specific guidance for common errors
-                if (response.status === 403) {
-                    if (errorData.message.includes('Resource not accessible')) {
-                        errorMessage = 'Permission denied: You need to be a repository collaborator to save templates directly. Templates will be saved as GitHub Gists instead.';
-                        // Fallback to gist saving
-                        return await this.saveTemplateAsGist(template);
-                    } else if (errorData.message.includes('API rate limit')) {
-                        errorMessage = 'GitHub API rate limit exceeded. Please try again later.';
+                return [];
+            }
+            
+            const files = await response.json();
+            const userTemplates = [];
+            
+            for (const file of files.filter(f => f.name.endsWith('.json'))) {
+                try {
+                    const templateResponse = await fetch(file.download_url);
+                    const template = await templateResponse.json();
+                    
+                    // Only include templates created by current user
+                    if (template.creator && template.creator.username === this.currentUser?.login) {
+                        userTemplates.push(template);
                     }
-                } else if (response.status === 401) {
-                    errorMessage = 'Authentication failed: Your GitHub token may be invalid or expired. Please log out and log in again.';
-                } else if (response.status === 404) {
-                    errorMessage = 'Repository not found: Saving template as GitHub Gist instead.';
-                    // Fallback to gist saving
-                    return await this.saveTemplateAsGist(template);
+                } catch (error) {
+                    console.error(`Error loading template ${file.name}:`, error);
                 }
-                
-                console.error('GitHub API Error Details:', {
-                    status: response.status,
-                    statusText: response.statusText,
-                    error: errorData
-                });
-                
-                throw new Error(errorMessage);
             }
-
-            return await response.json();
+            
+            return userTemplates;
         } catch (error) {
-            console.error('Error saving template to GitHub:', error);
-            throw error;
+            console.error('Error fetching user templates:', error);
+            return [];
         }
     }
 
-    // Delete template from GitHub
-    async deleteTemplate(templateId) {
-        if (!this.authenticated) {
-            throw new Error('Authentication required to delete templates');
-        }
-
-        const filename = `${templateId}.json`;
-        const filePath = `${this.templatesPath}/${filename}`;
-
-        try {
-            // Get file SHA
-            const fileResponse = await fetch(
-                `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${filePath}`,
-                {
-                    headers: {
-                        'Authorization': `token ${this.accessToken}`,
-                        'Accept': 'application/vnd.github.v3+json'
-                    }
-                }
-            );
-
-            if (!fileResponse.ok) {
-                throw new Error('Template not found');
-            }
-
-            const fileData = await fileResponse.json();
-
-            // Delete file
-            const deleteResponse = await fetch(
-                `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${filePath}`,
-                {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': `token ${this.accessToken}`,
-                        'Accept': 'application/vnd.github.v3+json',
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        message: `Delete template: ${templateId}`,
-                        sha: fileData.sha,
-                        branch: this.branch
-                    })
-                }
-            );
-
-            if (!deleteResponse.ok) {
-                const error = await deleteResponse.json();
-                throw new Error(`GitHub API error: ${error.message}`);
-            }
-
-            return true;
-        } catch (error) {
-            console.error('Error deleting template from GitHub:', error);
-            throw error;
-        }
-    }
-
-    // Get current user info
-    async getCurrentUser() {
-        if (!this.authenticated) return null;
-
-        try {
-            const response = await fetch(`${this.apiBase}/user`, {
-                headers: {
-                    'Authorization': `token ${this.accessToken}`,
-                    'Accept': 'application/vnd.github.v3+json'
-                }
-            });
-
-            if (response.ok) {
-                return await response.json();
-            }
-        } catch (error) {
-            console.error('Error getting user info:', error);
-        }
-        return null;
-    }
-
-    // Generic function to save any file to GitHub
-    async saveFileToGitHub(filePath, content, commitMessage, sha = null) {
-        if (!this.authenticated) {
-            throw new Error('Authentication required to save files');
-        }
-
-        try {
-            const encodedContent = btoa(content);
-            const commitData = {
-                message: commitMessage,
-                content: encodedContent,
-                branch: this.branch
-            };
-
-            if (sha) {
-                commitData.sha = sha;
-            }
-
-            const response = await fetch(
-                `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${filePath}`,
-                {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `token ${this.accessToken}`,
-                        'Accept': 'application/vnd.github.v3+json',
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(commitData)
-                }
-            );
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(`GitHub API error: ${errorData.message}`);
-            }
-
-            return await response.json();
-        } catch (error) {
-            console.error('Error saving file to GitHub:', error);
-            throw error;
-        }
-    }
-
-    // Like/unlike a template
+    // Like a template
     async likeTemplate(templateId) {
         if (!this.authenticated) {
             throw new Error('Authentication required to like templates');
         }
-
-        const likesPath = 'likes';
-        const userLikesFile = `${likesPath}/user_likes.json`;
-        const templateLikesFile = `${likesPath}/${templateId}_likes.json`;
-
+        
         try {
-            // Get current user
-            const user = await this.getCurrentUser();
-            if (!user) throw new Error('Unable to get user info');
-
-            // Get user's current likes
-            let userLikes = [];
-            try {
-                const userLikesResponse = await fetch(
-                    `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${userLikesFile}`,
-                    {
-                        headers: {
-                            'Authorization': `token ${this.accessToken}`,
-                            'Accept': 'application/vnd.github.v3+json'
-                        }
-                    }
-                );
-                if (userLikesResponse.ok) {
-                    const userLikesData = await userLikesResponse.json();
-                    userLikes = JSON.parse(atob(userLikesData.content));
-                }
-            } catch (error) {
-                // File doesn't exist yet, start with empty array
+            // Save like to user likes file
+            const userLikes = await this.getUserLikes();
+            if (!userLikes.includes(templateId)) {
+                userLikes.push(templateId);
+                await this.saveUserLikes(userLikes);
             }
-
-            // Check if already liked
-            const userLikeEntry = userLikes.find(entry => entry.username === user.login);
-            const isCurrentlyLiked = userLikeEntry && userLikeEntry.likedTemplates.includes(templateId);
-
-            // Get template likes count
-            let templateLikes = { templateId, likes: 0, likedBy: [] };
-            let templateLikesSha = null;
-            try {
-                const templateLikesResponse = await fetch(
-                    `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${templateLikesFile}`,
-                    {
-                        headers: {
-                            'Authorization': `token ${this.accessToken}`,
-                            'Accept': 'application/vnd.github.v3+json'
-                        }
-                    }
-                );
-                if (templateLikesResponse.ok) {
-                    const templateLikesData = await templateLikesResponse.json();
-                    templateLikes = JSON.parse(atob(templateLikesData.content));
-                    templateLikesSha = templateLikesData.sha;
-                }
-            } catch (error) {
-                // File doesn't exist yet
-            }
-
-            // Toggle like status
-            if (isCurrentlyLiked) {
-                // Unlike: remove from user's likes and template's likes
-                userLikeEntry.likedTemplates = userLikeEntry.likedTemplates.filter(id => id !== templateId);
-                templateLikes.likedBy = templateLikes.likedBy.filter(username => username !== user.login);
-                templateLikes.likes = Math.max(0, templateLikes.likes - 1);
-            } else {
-                // Like: add to user's likes and template's likes
-                if (!userLikeEntry) {
-                    userLikes.push({ username: user.login, likedTemplates: [templateId] });
-                } else {
-                    userLikeEntry.likedTemplates.push(templateId);
-                }
-                if (!templateLikes.likedBy.includes(user.login)) {
-                    templateLikes.likedBy.push(user.login);
-                    templateLikes.likes += 1;
-                }
-            }
-
-            // Save updated files
-            await this.saveFileToGitHub(userLikesFile, JSON.stringify(userLikes, null, 2), 'Update user likes');
-            await this.saveFileToGitHub(templateLikesFile, JSON.stringify(templateLikes, null, 2), `Update likes for ${templateId}`, templateLikesSha);
-
-            return {
-                liked: !isCurrentlyLiked,
-                totalLikes: templateLikes.likes
-            };
+            
+            // Update template likes count
+            const templateLikes = await this.getTemplateLikes(templateId);
+            const updatedLikes = templateLikes + 1;
+            await this.saveTemplateLikes(templateId, updatedLikes);
+            
+            return updatedLikes;
         } catch (error) {
-            console.error('Error toggling like:', error);
+            console.error('Error liking template:', error);
             throw error;
         }
     }
 
-    // Get template likes
-    async getTemplateLikes(templateId) {
-        const templateLikesFile = `likes/${templateId}_likes.json`;
-        
-        try {
-            const response = await fetch(
-                `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${templateLikesFile}`,
-                {
-                    headers: {
-                        'Authorization': `token ${this.accessToken}`,
-                        'Accept': 'application/vnd.github.v3+json'
-                    }
-                }
-            );
-            
-            if (response.ok) {
-                const data = await response.json();
-                return JSON.parse(atob(data.content));
-            }
-        } catch (error) {
-            console.error('Error getting template likes:', error);
+    // Unlike a template
+    async unlikeTemplate(templateId) {
+        if (!this.authenticated) {
+            throw new Error('Authentication required to unlike templates');
         }
         
-        return { templateId, likes: 0, likedBy: [] };
+        try {
+            // Remove like from user likes file
+            const userLikes = await this.getUserLikes();
+            const index = userLikes.indexOf(templateId);
+            if (index > -1) {
+                userLikes.splice(index, 1);
+                await this.saveUserLikes(userLikes);
+            }
+            
+            // Update template likes count
+            const templateLikes = await this.getTemplateLikes(templateId);
+            const updatedLikes = Math.max(0, templateLikes - 1);
+            await this.saveTemplateLikes(templateId, updatedLikes);
+            
+            return updatedLikes;
+        } catch (error) {
+            console.error('Error unliking template:', error);
+            throw error;
+        }
     }
 
-    // Get user's liked templates
+    // Get user's likes
     async getUserLikes() {
         if (!this.authenticated) return [];
-        
-        const user = await this.getCurrentUser();
-        if (!user) return [];
         
         try {
             const response = await fetch(
@@ -805,18 +554,124 @@ ${JSON.stringify(templateData, null, 2)}
             );
             
             if (response.ok) {
-                const data = await response.json();
-                const userLikes = JSON.parse(atob(data.content));
-                const userEntry = userLikes.find(entry => entry.username === user.login);
-                return userEntry ? userEntry.likedTemplates : [];
+                const file = await response.json();
+                const content = JSON.parse(atob(file.content));
+                return content[this.currentUser?.login] || [];
             }
+            
+            return [];
         } catch (error) {
             console.error('Error getting user likes:', error);
+            return [];
+        }
+    }
+
+    // Save user's likes
+    async saveUserLikes(likes) {
+        if (!this.authenticated) return;
+        
+        // For now, just store locally since we can't write to the repository
+        const allUserLikes = JSON.parse(localStorage.getItem('all_user_likes') || '{}');
+        allUserLikes[this.currentUser?.login] = likes;
+        localStorage.setItem('all_user_likes', JSON.stringify(allUserLikes));
+    }
+
+    // Get template likes count
+    async getTemplateLikes(templateId) {
+        try {
+            const response = await fetch(
+                `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/likes/${templateId}_likes.json`,
+                {
+                    headers: {
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                }
+            );
+            
+            if (response.ok) {
+                const file = await response.json();
+                const content = JSON.parse(atob(file.content));
+                return content.count || 0;
+            }
+            
+            return 0;
+        } catch (error) {
+            console.error('Error getting template likes:', error);
+            return 0;
+        }
+    }
+
+    // Save template likes count
+    async saveTemplateLikes(templateId, count) {
+        // For now, just store locally since we can't write to the repository
+        const templateLikes = JSON.parse(localStorage.getItem('template_likes') || '{}');
+        templateLikes[templateId] = count;
+        localStorage.setItem('template_likes', JSON.stringify(templateLikes));
+    }
+
+    // Save a file to GitHub (for repository collaborators only)
+    async saveFileToGitHub(path, content, message) {
+        if (!this.authenticated) {
+            throw new Error('Authentication required');
         }
         
-        return [];
+        try {
+            // Check if file exists first
+            let sha = null;
+            try {
+                const existingResponse = await fetch(
+                    `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${path}`,
+                    {
+                        headers: {
+                            'Authorization': `token ${this.accessToken}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    }
+                );
+                
+                if (existingResponse.ok) {
+                    const existingFile = await existingResponse.json();
+                    sha = existingFile.sha;
+                }
+            } catch (error) {
+                // File doesn't exist, that's okay
+            }
+            
+            const commitData = {
+                message: message,
+                content: btoa(content),
+                branch: this.branch
+            };
+            
+            if (sha) {
+                commitData.sha = sha;
+            }
+            
+            const response = await fetch(
+                `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${path}`,
+                {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${this.accessToken}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(commitData)
+                }
+            );
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`GitHub API error: ${errorData.message}`);
+            }
+            
+            return await response.json();
+        } catch (error) {
+            console.error('Error saving file to GitHub:', error);
+            throw error;
+        }
     }
 }
 
-// Global instance
-window.githubStorage = new GitHubStorage();
+// Create global instance
+const githubStorage = new GitHubStorage();

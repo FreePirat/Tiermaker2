@@ -1199,52 +1199,63 @@ async function saveTemplate() {
     // Save publicly if requested
     if (sharePublicly) {
         try {
-            showMessage('Submitting template to community...', 'info');
+            showMessage('Submitting template via Pull Request...', 'info');
             // Set the public flag on the template before saving
             const publicTemplate = { ...currentTemplate, public: true, isPublic: true };
             const result = await githubStorage.saveTemplate(publicTemplate);
             
             if (result && result.success) {
-                showMessage('Template saved locally and submitted to community! Check the GitHub issue for status.', 'success');
-                console.log('Template submission URL:', result.issueUrl);
+                showMessage('Template saved locally and submitted as Pull Request! 🎉', 'success');
+                if (result.pullRequestUrl) {
+                    console.log('Pull Request URL:', result.pullRequestUrl);
+                    // Optionally show the PR URL to the user
+                    setTimeout(() => {
+                        if (confirm('Template submitted successfully!\n\nWould you like to view the Pull Request?')) {
+                            window.open(result.pullRequestUrl, '_blank');
+                        }
+                    }, 2000);
+                }
             } else {
-                showMessage('Template saved locally and submitted to community!', 'success');
+                showMessage('Template saved locally and submitted to repository!', 'success');
             }
         } catch (error) {
             console.error('Error submitting template:', error);
             
-            // If this is a CORS or GitHub Pages issue, offer alternative
-            if (error.message.includes('CORS') || error.message.includes('GitHub Pages') || error.message.includes('alternative')) {
-                const useAlternative = confirm(
-                    'GitHub Pages cannot access GitHub API directly for public sharing.\n\n' +
-                    'Would you like to download your template as a JSON file instead?\n' +
-                    'You can then manually create a GitHub Gist to share it.\n\n' +
-                    'Click OK to download, or Cancel to continue.'
-                );
+            // Provide helpful error message and fallback
+            const useAlternative = confirm(
+                `Failed to submit template: ${error.message}\n\n` +
+                'Would you like to download your template as a JSON file instead?\n' +
+                'You can then manually fork the repository and add it yourself.\n\n' +
+                'Click OK to download, or Cancel to continue.'
+            );
+            
+            if (useAlternative) {
+                // Download the template as JSON
+                const templateData = {
+                    ...currentTemplate,
+                    createdAt: currentTemplate.createdAt || new Date().toISOString(),
+                    public: true,
+                    creator: null // No creator info since not saved via API
+                };
                 
-                if (useAlternative) {
-                    // Download the template as JSON
-                    const templateData = {
-                        ...currentTemplate,
-                        createdAt: currentTemplate.createdAt || new Date().toISOString(),
-                        public: true,
-                        creator: null // No creator info since not saved via API
-                    };
-                    
-                    const blob = new Blob([JSON.stringify(templateData, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = `tiermaker2_${currentTemplate.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${currentTemplate.id}.json`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    URL.revokeObjectURL(url);
-                    
-                    showMessage('Template saved locally and downloaded! Upload to GitHub Gist manually to share.', 'success');
-                } else {
-                    showMessage('Template saved locally, but failed to submit publicly: ' + error.message, 'warning');
-                }
+                const blob = new Blob([JSON.stringify(templateData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `${currentTemplate.id}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                
+                showMessage('Template saved locally and downloaded! Manual submission instructions in console.', 'success');
+                console.log('Manual submission instructions:');
+                console.log('1. Go to https://github.com/FreePirat/Tiermaker2');
+                console.log('2. Click "Fork" to create your own copy');
+                console.log('3. In your fork, go to the "templates" folder');
+                console.log('4. Click "Add file" > "Upload files"');
+                console.log('5. Upload the downloaded JSON file');
+                console.log('6. Create a Pull Request back to the main repository');
             } else {
                 showMessage('Template saved locally, but failed to submit publicly: ' + error.message, 'warning');
             }
