@@ -325,7 +325,14 @@
         // Initialize user likes
         try {
             if (isLocalStorageAvailable()) {
-                userLikes = JSON.parse(localStorage.getItem('template_likes') || '[]');
+                const storedLikes = localStorage.getItem('template_likes');
+                if (storedLikes) {
+                    const parsedLikes = JSON.parse(storedLikes);
+                    // Ensure it's an array
+                    userLikes = Array.isArray(parsedLikes) ? parsedLikes : [];
+                } else {
+                    userLikes = [];
+                }
                 console.log('Loaded user likes from localStorage:', userLikes);
             } else {
                 console.warn('localStorage not available, likes will not persist');
@@ -573,11 +580,17 @@
             let currentUserLikes = [];
             try {
                 if (isLocalStorageAvailable()) {
-                    currentUserLikes = JSON.parse(localStorage.getItem('template_likes') || '[]');
+                    const storedLikes = localStorage.getItem('template_likes');
+                    if (storedLikes) {
+                        const parsedLikes = JSON.parse(storedLikes);
+                        // Ensure it's an array
+                        currentUserLikes = Array.isArray(parsedLikes) ? parsedLikes : [];
+                    }
                 }
             } catch (error) {
                 console.error('Error loading user likes in createTemplateElement:', error);
-                currentUserLikes = window.userLikes || [];
+                // Fallback to global userLikes if it exists and is an array
+                currentUserLikes = (window.userLikes && Array.isArray(window.userLikes)) ? window.userLikes : [];
             }
             
             const isLiked = currentUserLikes.includes(template.id);
@@ -617,8 +630,30 @@
                 }
                 
                 // Use localStorage for likes since GitHub Pages can't write to GitHub API
-                let userLikes = JSON.parse(localStorage.getItem('template_likes') || '[]');
-                let templateLikes = JSON.parse(localStorage.getItem('template_like_counts') || '{}');
+                let userLikes = [];
+                let templateLikes = {};
+                
+                try {
+                    const storedUserLikes = localStorage.getItem('template_likes');
+                    if (storedUserLikes) {
+                        const parsedUserLikes = JSON.parse(storedUserLikes);
+                        userLikes = Array.isArray(parsedUserLikes) ? parsedUserLikes : [];
+                    }
+                } catch (parseError) {
+                    console.error('Error parsing user likes:', parseError);
+                    userLikes = [];
+                }
+                
+                try {
+                    const storedTemplateLikes = localStorage.getItem('template_like_counts');
+                    if (storedTemplateLikes) {
+                        const parsedTemplateLikes = JSON.parse(storedTemplateLikes);
+                        templateLikes = (typeof parsedTemplateLikes === 'object' && parsedTemplateLikes !== null) ? parsedTemplateLikes : {};
+                    }
+                } catch (parseError) {
+                    console.error('Error parsing template likes:', parseError);
+                    templateLikes = {};
+                }
                 
                 console.log('Current user likes:', userLikes);
                 console.log('Current template likes:', templateLikes);
@@ -688,8 +723,21 @@
                 
                 // Revert button state on error
                 try {
-                    const currentLikes = JSON.parse(localStorage.getItem('template_like_counts') || '{}');
-                    const isLiked = userLikes.includes(templateId);
+                    const currentLikesStr = localStorage.getItem('template_like_counts');
+                    let currentLikes = {};
+                    if (currentLikesStr) {
+                        const parsed = JSON.parse(currentLikesStr);
+                        currentLikes = (typeof parsed === 'object' && parsed !== null) ? parsed : {};
+                    }
+                    
+                    const currentUserLikesStr = localStorage.getItem('template_likes');
+                    let currentUserLikes = [];
+                    if (currentUserLikesStr) {
+                        const parsed = JSON.parse(currentUserLikesStr);
+                        currentUserLikes = Array.isArray(parsed) ? parsed : [];
+                    }
+                    
+                    const isLiked = currentUserLikes.includes(templateId);
                     const likeCount = currentLikes[templateId] || 0;
                     
                     if (isLiked) {
@@ -740,11 +788,24 @@
 
         async function loadLikesForTemplates(templates) {
             // Load likes from localStorage instead of GitHub API
-            const templateLikes = JSON.parse(localStorage.getItem('template_like_counts') || '{}');
+            let templateLikes = {};
             
-            templates.forEach(template => {
-                template.likes = templateLikes[template.id] || 0;
-            });
+            try {
+                const storedTemplateLikes = localStorage.getItem('template_like_counts');
+                if (storedTemplateLikes) {
+                    const parsed = JSON.parse(storedTemplateLikes);
+                    templateLikes = (typeof parsed === 'object' && parsed !== null) ? parsed : {};
+                }
+            } catch (error) {
+                console.error('Error loading template likes in loadLikesForTemplates:', error);
+                templateLikes = {};
+            }
+            
+            if (Array.isArray(templates)) {
+                templates.forEach(template => {
+                    template.likes = templateLikes[template.id] || 0;
+                });
+            }
         }
 
         function displayRecentTemplates() {
