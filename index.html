@@ -307,7 +307,34 @@
         };
         
         // User likes storage
-        let userLikes = JSON.parse(localStorage.getItem('template_likes') || '[]');
+        let userLikes = [];
+        
+        // Check localStorage availability
+        function isLocalStorageAvailable() {
+            try {
+                const test = '__localStorage_test__';
+                localStorage.setItem(test, test);
+                localStorage.removeItem(test);
+                return true;
+            } catch (e) {
+                console.error('localStorage is not available:', e);
+                return false;
+            }
+        }
+        
+        // Initialize user likes
+        try {
+            if (isLocalStorageAvailable()) {
+                userLikes = JSON.parse(localStorage.getItem('template_likes') || '[]');
+                console.log('Loaded user likes from localStorage:', userLikes);
+            } else {
+                console.warn('localStorage not available, likes will not persist');
+                userLikes = [];
+            }
+        } catch (error) {
+            console.error('Error loading user likes from localStorage:', error);
+            userLikes = [];
+        }
 
         document.addEventListener('DOMContentLoaded', async function() {
             // Initialize GitHub storage
@@ -541,15 +568,26 @@
             const creatorInfo = template.creator ? 
                 `<div class="template-creator">by @${template.creator.username}</div>` : 
                 '<div class="template-creator">Anonymous</div>';
-                
-            const isLiked = userLikes.includes(template.id);
+            
+            // Get the current user likes from localStorage to ensure it's up to date
+            let currentUserLikes = [];
+            try {
+                if (isLocalStorageAvailable()) {
+                    currentUserLikes = JSON.parse(localStorage.getItem('template_likes') || '[]');
+                }
+            } catch (error) {
+                console.error('Error loading user likes in createTemplateElement:', error);
+                currentUserLikes = window.userLikes || [];
+            }
+            
+            const isLiked = currentUserLikes.includes(template.id);
             const likesCount = template.likes || 0;
             
             templateItem.innerHTML = `
                 <div class="template-image">
                     <img src="${thumbnailImage}" alt="${template.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=\\"http://www.w3.org/2000/svg\\" width=\\"120\\" height=\\"120\\" fill=\\"%23666\\"><rect width=\\"120\\" height=\\"120\\"/><text x=\\"60\\" y=\\"60\\" text-anchor=\\"middle\\" dy=\\".3em\\" fill=\\"white\\">No Image</text></svg>'">
                     <div class="template-actions">
-                        <button class="like-btn ${isLiked ? 'liked' : ''}" onclick="toggleLike('${template.id}', this, '${section}')">>
+                        <button class="like-btn ${isLiked ? 'liked' : ''}" onclick="toggleLike('${template.id}', this, '${section}')">
                             ${isLiked ? '❤️' : '🤍'} <span class="like-count">${likesCount}</span>
                         </button>
                     </div>
@@ -571,11 +609,22 @@
 
         async function toggleLike(templateId, buttonElement, section) {
             try {
+                console.log('Toggling like for template:', templateId, 'in section:', section);
+                
+                // Check if localStorage is available
+                if (!isLocalStorageAvailable()) {
+                    throw new Error('Local storage is not available. Likes cannot be saved.');
+                }
+                
                 // Use localStorage for likes since GitHub Pages can't write to GitHub API
                 let userLikes = JSON.parse(localStorage.getItem('template_likes') || '[]');
                 let templateLikes = JSON.parse(localStorage.getItem('template_like_counts') || '{}');
                 
+                console.log('Current user likes:', userLikes);
+                console.log('Current template likes:', templateLikes);
+                
                 const isCurrentlyLiked = userLikes.includes(templateId);
+                console.log('Is currently liked:', isCurrentlyLiked);
                 
                 if (isCurrentlyLiked) {
                     // Unlike
@@ -583,30 +632,87 @@
                     templateLikes[templateId] = Math.max(0, (templateLikes[templateId] || 0) - 1);
                     buttonElement.classList.remove('liked');
                     buttonElement.innerHTML = `🤍 <span class="like-count">${templateLikes[templateId] || 0}</span>`;
+                    console.log('Unliked template. New like count:', templateLikes[templateId]);
                 } else {
                     // Like
                     userLikes.push(templateId);
                     templateLikes[templateId] = (templateLikes[templateId] || 0) + 1;
                     buttonElement.classList.add('liked');
                     buttonElement.innerHTML = `❤️ <span class="like-count">${templateLikes[templateId]}</span>`;
+                    console.log('Liked template. New like count:', templateLikes[templateId]);
                 }
                 
                 // Save to localStorage
-                localStorage.setItem('template_likes', JSON.stringify(userLikes));
-                localStorage.setItem('template_like_counts', JSON.stringify(templateLikes));
+                try {
+                    localStorage.setItem('template_likes', JSON.stringify(userLikes));
+                    localStorage.setItem('template_like_counts', JSON.stringify(templateLikes));
+                    console.log('Successfully saved to localStorage');
+                } catch (storageError) {
+                    console.error('Error saving to localStorage:', storageError);
+                    throw new Error('Failed to save like data to local storage: ' + storageError.message);
+                }
+                
+                // Update the global userLikes array
+                window.userLikes = userLikes;
                 
                 // Update the template object in the appropriate array
-                if (section === 'recent') {
-                    const template = recentTemplates.find(t => t.id === templateId);
-                    if (template) template.likes = templateLikes[templateId] || 0;
-                } else {
-                    const template = categoryTemplates[section].find(t => t.id === templateId);
-                    if (template) template.likes = templateLikes[templateId] || 0;
+                try {
+                    if (section === 'recent') {
+                        const template = recentTemplates.find(t => t.id === templateId);
+                        if (template) {
+                            template.likes = templateLikes[templateId] || 0;
+                            console.log('Updated recent template likes:', template.likes);
+                        }
+                    } else {
+                        const template = categoryTemplates[section]?.find(t => t.id === templateId);
+                        if (template) {
+                            template.likes = templateLikes[templateId] || 0;
+                            console.log('Updated category template likes:', template.likes);
+                        }
+                    }
+                } catch (updateError) {
+                    console.error('Error updating template object:', updateError);
+                    // Don't throw here as the like was already saved successfully
                 }
+                
+                console.log('Like toggle completed successfully');
                 
             } catch (error) {
                 console.error('Error toggling like:', error);
-                alert('Failed to update like. Please try again.');
+                console.error('Error details:', {
+                    message: error.message,
+                    stack: error.stack,
+                    templateId,
+                    section
+                });
+                
+                // Revert button state on error
+                try {
+                    const currentLikes = JSON.parse(localStorage.getItem('template_like_counts') || '{}');
+                    const isLiked = userLikes.includes(templateId);
+                    const likeCount = currentLikes[templateId] || 0;
+                    
+                    if (isLiked) {
+                        buttonElement.classList.add('liked');
+                        buttonElement.innerHTML = `❤️ <span class="like-count">${likeCount}</span>`;
+                    } else {
+                        buttonElement.classList.remove('liked');
+                        buttonElement.innerHTML = `🤍 <span class="like-count">${likeCount}</span>`;
+                    }
+                } catch (revertError) {
+                    console.error('Error reverting button state:', revertError);
+                }
+                
+                // Show a more specific error message
+                let errorMessage = 'Failed to update like. ';
+                if (error.message.includes('localStorage') || error.message.includes('storage')) {
+                    errorMessage += 'Local storage might be full or disabled. Please check your browser settings.';
+                } else if (error.message.includes('available')) {
+                    errorMessage += 'Browser storage is not available.';
+                } else {
+                    errorMessage += 'Please try again.';
+                }
+                alert(errorMessage);
             }
         }
 
