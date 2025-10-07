@@ -320,12 +320,19 @@ This template has been automatically submitted via TierMaker2 and will be auto-m
 ---
 *Submitted via TierMaker2 template creator*`;
 
+        // Validate required data
+        if (!forkOwner || !this.branch || !template.name) {
+            throw new Error('Missing required data for Pull Request creation');
+        }
+
         const prData = {
             title: prTitle,
             body: prBody,
             head: `${forkOwner}:${this.branch}`,
             base: this.branch
         };
+
+        console.log('Creating PR with data:', prData);
 
         const response = await fetch(
             `${this.apiBase}/repos/${this.owner}/${this.repo}/pulls`,
@@ -341,8 +348,41 @@ This template has been automatically submitted via TierMaker2 and will be auto-m
         );
 
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(`Failed to create Pull Request: ${errorData.message}`);
+            let errorData;
+            try {
+                errorData = await response.json();
+            } catch (parseError) {
+                throw new Error(`Failed to create pull request: HTTP ${response.status} ${response.statusText}`);
+            }
+            
+            console.error('PR Creation Failed:', {
+                status: response.status,
+                statusText: response.statusText,
+                error: errorData,
+                prData: prData
+            });
+            
+            let errorMessage = `Failed to create pull request: ${errorData.message || 'Unknown error'}`;
+            
+            // Enhanced error handling for validation failures
+            if (response.status === 422) {
+                if (errorData.errors && errorData.errors.length > 0) {
+                    const validationErrors = errorData.errors.map(err => `${err.field}: ${err.message || err.code}`).join(', ');
+                    errorMessage = `Validation Failed: ${validationErrors}`;
+                } else if (errorData.message.includes('No commits between')) {
+                    errorMessage = 'No changes detected. The template may already exist in the repository.';
+                } else if (errorData.message.includes('head sha')) {
+                    errorMessage = 'Fork synchronization issue. Please wait a moment and try again.';
+                } else {
+                    errorMessage = `Validation Failed: ${errorData.message}`;
+                }
+            } else if (response.status === 403) {
+                errorMessage = 'Permission denied: Your GitHub token may need additional permissions.';
+            } else if (response.status === 404) {
+                errorMessage = 'Repository or fork not found. Please check that your fork exists.';
+            }
+            
+            throw new Error(errorMessage);
         }
 
         const pr = await response.json();

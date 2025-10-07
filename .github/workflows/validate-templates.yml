@@ -14,7 +14,7 @@ permissions:
 jobs:
   validate-template:
     runs-on: ubuntu-latest
-    if: startsWith(github.event.pull_request.title, 'Add template:')
+    if: startsWith(github.event.pull_request.title, 'Add template:') || startsWith(github.event.pull_request.title, 'Delete template:')
     
     steps:
     - name: Checkout PR
@@ -138,6 +138,29 @@ jobs:
           echo "VALIDATION_PASSED=false" >> $GITHUB_ENV
         fi
 
+    - name: Validate template deletion
+      if: env.TEMPLATE_FILES_CHANGED == 'false' && startsWith(github.event.pull_request.title, 'Delete template:')
+      run: |
+        echo "Validating template deletion request..."
+        
+        # Extract template ID from PR title
+        pr_title="${{ github.event.pull_request.title }}"
+        template_id=${pr_title#"Delete template: "}
+        echo "Template ID to delete: $template_id"
+        
+        # Check if the template file actually exists in the main branch
+        if gh api /repos/${{ github.repository }}/contents/templates/${template_id}.json > /dev/null 2>&1; then
+          echo "✅ Template file exists and can be deleted"
+          echo "DELETION_VALID=true" >> $GITHUB_ENV
+          echo "VALIDATION_PASSED=true" >> $GITHUB_ENV
+        else
+          echo "❌ Template file does not exist in repository"
+          echo "DELETION_VALID=false" >> $GITHUB_ENV
+          echo "VALIDATION_PASSED=false" >> $GITHUB_ENV
+        fi
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Merge validated template
       if: env.VALIDATION_PASSED == 'true' && env.SAFE_CHANGES == 'true'
       run: |
@@ -177,19 +200,25 @@ jobs:
     - name: Comment on validation failure
       if: env.VALIDATION_PASSED == 'false' || env.SAFE_CHANGES == 'false'
       run: |
-        comment="❌ **Template validation failed**\n\n"
+        comment="❌ **Validation failed**\n\n"
         
-        if [[ "${{ env.VALIDATION_PASSED }}" == "false" ]]; then
-          comment+="**Template validation errors detected.** Please check that your template:\n"
-          comment+="- ✅ Is valid JSON\n"
-          comment+="- ✅ Contains required fields: id, name, images, tiers\n"
-          comment+="- ✅ Has template ID matching the filename\n"
-          comment+="- ✅ Doesn't exceed size limits (1000 images, 50 tiers, 10MB file)\n\n"
+        if [[ "${{ github.event.pull_request.title }}" == Delete\ template:* ]]; then
+          if [[ "${{ env.DELETION_VALID }}" == "false" ]]; then
+            comment+="**Template deletion failed.** The requested template does not exist in the repository.\n\n"
+          fi
+        else
+          if [[ "${{ env.VALIDATION_PASSED }}" == "false" ]]; then
+            comment+="**Template validation errors detected.** Please check that your template:\n"
+            comment+="- ✅ Is valid JSON\n"
+            comment+="- ✅ Contains required fields: id, name, images, tiers\n"
+            comment+="- ✅ Has template ID matching the filename\n"
+            comment+="- ✅ Doesn't exceed size limits (1000 images, 50 tiers, 10MB file)\n\n"
+          fi
         fi
         
         if [[ "${{ env.SAFE_CHANGES }}" == "false" ]]; then
           comment+="**Unsafe changes detected.** This PR:\n"
-          comment+="- ✅ Should only add new template JSON files\n"
+          comment+="- ✅ Should only add/remove template JSON files\n"
           comment+="- ✅ Should not modify existing files\n"
           comment+="- ✅ Should only touch the templates/ directory\n\n"
         fi

@@ -113,8 +113,13 @@ document.addEventListener('DOMContentLoaded', async function() {
         setupTierLabelListeners();
         setupTierRowSorting();
         addDragHandlesToExistingTiers();
+        updateTierLabelSizes(); // Initial tier label sizing
+        initializeTemplateInfoSection(); // Initialize collapse state
     }, 500);
 });
+
+// Add window resize listener for responsive tier label sizing
+window.addEventListener('resize', debouncedUpdateTierLabelSizes);
 
 function forceRemoveEyedropperFromExisting() {
     console.log('🎯 Force removing eyedropper from existing color pickers...');
@@ -550,6 +555,9 @@ function createImageElement(src, name) {
     if (!currentTemplate.thumbnail) {
         setThumbnail(src);
     }
+    
+    // Update template state and tier label sizes
+    updateTemplateState();
 }
 
 // Drag and Drop Functions
@@ -575,8 +583,52 @@ function drop(e) {
     e.preventDefault();
     e.currentTarget.classList.remove('drag-over');
     
-    if (draggedElement && e.currentTarget.classList.contains('tier-items') || e.currentTarget.classList.contains('image-pool-container')) {
-        e.currentTarget.appendChild(draggedElement);
+    if (draggedElement && (e.currentTarget.classList.contains('tier-items') || e.currentTarget.classList.contains('image-pool-container'))) {
+        // Handle pinned character drops
+        if (draggedElement.classList.contains('pinned-character')) {
+            // Create a new tier item from the pinned character
+            const newItem = document.createElement('div');
+            newItem.className = 'tier-item';
+            newItem.draggable = true;
+            
+            const img = document.createElement('img');
+            img.src = draggedElement.dataset.src;
+            img.alt = 'Character';
+            
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'remove-btn';
+            removeBtn.innerHTML = '×';
+            removeBtn.onclick = removeImage;
+            
+            newItem.appendChild(img);
+            newItem.appendChild(removeBtn);
+            
+            // Setup drag events for the new item
+            setupDragEvents(newItem);
+            
+            e.currentTarget.appendChild(newItem);
+            
+            // Remove the original image from the main pool
+            const poolContainer = document.querySelector('.image-pool-container');
+            const originalImages = poolContainer.querySelectorAll('.tier-item img');
+            
+            for (let originalImg of originalImages) {
+                if (originalImg.src === draggedElement.dataset.src) {
+                    // Remove the parent tier-item
+                    const tierItem = originalImg.closest('.tier-item');
+                    if (tierItem) {
+                        tierItem.remove();
+                        break; // Only remove the first match
+                    }
+                }
+            }
+            
+            // Update the pinned pool to reflect the change
+            updatePinnedPool();
+        } else {
+            // Handle regular drops
+            e.currentTarget.appendChild(draggedElement);
+        }
         updateTemplateState();
     }
 }
@@ -831,16 +883,27 @@ function randomizeImages() {
 }
 
 function removeImage(e) {
-    if (confirm('Remove this image?')) {
-        const imgElement = e.target.closest('.tier-item');
-        const imgSrc = imgElement.querySelector('img').src;
-        
+    const imgElement = e.target.closest('.tier-item');
+    const imgSrc = imgElement.querySelector('img').src;
+    
+    // Check if user wants to skip confirmation
+    const skipConfirmation = localStorage.getItem('skipImageDeleteConfirm') === 'true';
+    
+    if (skipConfirmation) {
         // Remove from current template images
         currentTemplate.images = currentTemplate.images.filter(img => img.src !== imgSrc);
-        
         imgElement.remove();
         updateTemplateState();
+        return;
     }
+    
+    // Show custom confirmation dialog
+    showImageDeleteConfirmation(() => {
+        // Remove from current template images
+        currentTemplate.images = currentTemplate.images.filter(img => img.src !== imgSrc);
+        imgElement.remove();
+        updateTemplateState();
+    });
 }
 
 function sortImages() {
@@ -995,19 +1058,42 @@ function removeImageFromTemplate(event) {
     const imgElement = event.target.closest('.tier-item');
     const imgSrc = imgElement.querySelector('img').src;
     
-    // Remove from template data
-    currentTemplate.images = currentTemplate.images.filter(img => img.src !== imgSrc);
+    // Check if user wants to skip confirmation
+    const skipConfirmation = localStorage.getItem('skipImageDeleteConfirm') === 'true';
     
-    // If this was the thumbnail, clear it
-    if (currentTemplate.thumbnail === imgSrc) {
-        clearThumbnail();
+    if (skipConfirmation) {
+        // Remove from template data
+        currentTemplate.images = currentTemplate.images.filter(img => img.src !== imgSrc);
+        
+        // If this was the thumbnail, clear it
+        if (currentTemplate.thumbnail === imgSrc) {
+            clearThumbnail();
+        }
+        
+        // Remove from DOM
+        imgElement.remove();
+        
+        updateTemplateState();
+        showMessage('Image removed', 'info');
+        return;
     }
     
-    // Remove from DOM
-    imgElement.remove();
-    
-    updateTemplateState();
-    showMessage('Image removed', 'info');
+    // Show custom confirmation dialog
+    showImageDeleteConfirmation(() => {
+        // Remove from template data
+        currentTemplate.images = currentTemplate.images.filter(img => img.src !== imgSrc);
+        
+        // If this was the thumbnail, clear it
+        if (currentTemplate.thumbnail === imgSrc) {
+            clearThumbnail();
+        }
+        
+        // Remove from DOM
+        imgElement.remove();
+        
+        updateTemplateState();
+        showMessage('Image removed', 'info');
+    });
 }
 
 function enableThumbnailSelection() {
@@ -1055,6 +1141,40 @@ function updateTemplateState() {
             items: items
         });
     });
+    
+    // Update tier label sizes based on row height
+    updateTierLabelSizes();
+}
+
+// Dynamic tier label sizing function
+function updateTierLabelSizes() {
+    document.querySelectorAll('.tier-row').forEach(row => {
+        const tierLabel = row.querySelector('.tier-label');
+        const tierItems = row.querySelector('.tier-items');
+        
+        if (tierLabel && tierItems) {
+            // Get the actual height of the tier items container
+            const containerHeight = tierItems.offsetHeight;
+            
+            // Base font size calculation based on container height
+            // 80px height = 24px font size (base)
+            // Scale proportionally with a minimum and maximum
+            const baseFontSize = 24;
+            const baseHeight = 80;
+            const scaleFactor = Math.max(0.7, Math.min(2, containerHeight / baseHeight));
+            const newFontSize = Math.round(baseFontSize * scaleFactor);
+            
+            // Apply the calculated font size
+            tierLabel.style.fontSize = `${Math.max(16, Math.min(48, newFontSize))}px`;
+        }
+    });
+}
+
+// Debounced version for performance
+let tierLabelSizeUpdateTimeout;
+function debouncedUpdateTierLabelSizes() {
+    clearTimeout(tierLabelSizeUpdateTimeout);
+    tierLabelSizeUpdateTimeout = setTimeout(updateTierLabelSizes, 100);
 }
 
 function resetTierList() {
@@ -1343,6 +1463,9 @@ function recreateTierStructure(tiers) {
     
     // Setup tier row sorting
     setupTierRowSorting();
+    
+    // Update tier label sizes based on content
+    setTimeout(updateTierLabelSizes, 100); // Small delay to ensure DOM is ready
 }
 
 function loadTemplateImages(images) {
@@ -1409,3 +1532,383 @@ document.addEventListener('drop', function(e) {
         e.target.classList.remove('drag-over');
     }
 });
+
+// Pinned Character Pool System
+let pinnedPoolVisible = false;
+let pinnedPoolImages = [];
+
+function togglePinnedPool() {
+    const pinnedPool = document.getElementById('pinned-pool');
+    const pinBtn = document.getElementById('pin-pool-btn');
+    
+    pinnedPoolVisible = !pinnedPoolVisible;
+    
+    if (pinnedPoolVisible) {
+        // Show pinned pool
+        pinnedPool.classList.remove('hidden');
+        document.body.classList.add('pinned-pool-active');
+        pinBtn.classList.add('active');
+        pinBtn.innerHTML = '📌 Unpin Pool';
+        
+        // Populate with current images
+        populatePinnedPool();
+    } else {
+        // Hide pinned pool
+        pinnedPool.classList.add('hidden');
+        document.body.classList.remove('pinned-pool-active');
+        pinBtn.classList.remove('active');
+        pinBtn.innerHTML = '📌 Pin Pool';
+    }
+}
+
+function populatePinnedPool() {
+    const poolContainer = document.querySelector('.image-pool-container');
+    const pinnedRows = document.querySelectorAll('.pinned-pool-row');
+    
+    // Clear existing pinned images
+    pinnedRows.forEach(row => row.innerHTML = '');
+    
+    // Get all actual images from the main pool (only tier-items with images)
+    const images = Array.from(poolContainer.querySelectorAll('.tier-item img'));
+    
+    // Only proceed if there are actual images
+    if (images.length === 0) {
+        return;
+    }
+    
+    // Distribute images across two rows
+    const imagesPerRow = Math.ceil(images.length / 2);
+    
+    images.forEach((img, index) => {
+        const rowIndex = Math.floor(index / imagesPerRow);
+        const targetRow = pinnedRows[rowIndex];
+        
+        if (targetRow) {
+            // Create pinned version using the actual image
+            const pinnedImg = createPinnedCharacter(img);
+            targetRow.appendChild(pinnedImg);
+        }
+    });
+}
+
+function createPinnedCharacter(originalImg) {
+    const pinnedChar = document.createElement('div');
+    pinnedChar.className = 'pinned-character';
+    pinnedChar.draggable = true;
+    
+    // Use the actual image element directly
+    const imgClone = document.createElement('img');
+    imgClone.src = originalImg.src;
+    imgClone.alt = originalImg.alt;
+    pinnedChar.appendChild(imgClone);
+    
+    // Store the source for drag operations
+    pinnedChar.dataset.src = originalImg.src;
+    
+    // Add drag events
+    pinnedChar.addEventListener('dragstart', function(e) {
+        draggedElement = pinnedChar;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', originalImg.src);
+        pinnedChar.style.opacity = '0.5';
+    });
+    
+    pinnedChar.addEventListener('dragend', function(e) {
+        pinnedChar.style.opacity = '1';
+        draggedElement = null;
+    });
+    
+    return pinnedChar;
+}
+
+// Setup drag events for tier items
+function setupDragEvents(tierItem) {
+    tierItem.addEventListener('dragstart', function(e) {
+        draggedElement = tierItem;
+        e.dataTransfer.effectAllowed = 'move';
+        tierItem.style.opacity = '0.5';
+    });
+    
+    tierItem.addEventListener('dragend', function(e) {
+        tierItem.style.opacity = '1';
+        draggedElement = null;
+    });
+}
+
+// Setup drag events for tier items
+function setupDragEvents(element) {
+    element.addEventListener('dragstart', function(e) {
+        draggedElement = element;
+        e.dataTransfer.effectAllowed = 'move';
+        element.style.opacity = '0.5';
+    });
+    
+    element.addEventListener('dragend', function(e) {
+        element.style.opacity = '1';
+        draggedElement = null;
+    });
+}
+
+// Update the main pool when images are added/removed
+function updatePinnedPool() {
+    if (pinnedPoolVisible) {
+        populatePinnedPool();
+    }
+}
+
+// Hook into image addition by monitoring the pool container
+const imagePoolContainer = document.querySelector('.image-pool-container');
+if (imagePoolContainer) {
+    // Use MutationObserver to detect changes in the image pool
+    const poolObserver = new MutationObserver(function(mutations) {
+        let shouldUpdate = false;
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'childList') {
+                shouldUpdate = true;
+            }
+        });
+        if (shouldUpdate) {
+            updatePinnedPool();
+        }
+    });
+    
+    poolObserver.observe(imagePoolContainer, { 
+        childList: true, 
+        subtree: true 
+    });
+}
+
+// Handle keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    // Ctrl/Cmd + P to toggle pinned pool
+    if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+        e.preventDefault();
+        togglePinnedPool();
+    }
+});
+
+// Auto-scroll functionality for dragging
+let autoScrollInterval = null;
+let isAutoScrolling = false;
+
+function startAutoScroll(direction, speed = 5) {
+    if (isAutoScrolling) return;
+    
+    isAutoScrolling = true;
+    autoScrollInterval = setInterval(() => {
+        if (direction === 'up') {
+            window.scrollBy(0, -speed);
+        } else if (direction === 'down') {
+            window.scrollBy(0, speed);
+        }
+    }, 16); // ~60fps for smooth scrolling
+}
+
+function stopAutoScroll() {
+    if (autoScrollInterval) {
+        clearInterval(autoScrollInterval);
+        autoScrollInterval = null;
+        isAutoScrolling = false;
+    }
+}
+
+function checkAutoScroll(e) {
+    const scrollZone = 100; // pixels from edge to trigger scroll
+    const viewportHeight = window.innerHeight;
+    const mouseY = e.clientY;
+    
+    // Check if near top of screen
+    if (mouseY < scrollZone && window.scrollY > 0) {
+        const speed = Math.max(2, (scrollZone - mouseY) / 10); // Faster near edge
+        startAutoScroll('up', speed);
+    }
+    // Check if near bottom of screen
+    else if (mouseY > viewportHeight - scrollZone) {
+        const speed = Math.max(2, (mouseY - (viewportHeight - scrollZone)) / 10);
+        startAutoScroll('down', speed);
+    }
+    // Stop scrolling if not in scroll zones
+    else {
+        stopAutoScroll();
+    }
+}
+
+// Add dragover event to document for auto-scrolling
+document.addEventListener('dragover', function(e) {
+    if (draggedElement) {
+        checkAutoScroll(e);
+    }
+});
+
+// Stop auto-scrolling when drag ends
+document.addEventListener('dragend', function(e) {
+    stopAutoScroll();
+});
+
+// Stop auto-scrolling when drop occurs
+document.addEventListener('drop', function(e) {
+    stopAutoScroll();
+});
+
+// Stop auto-scrolling when dragging is cancelled (like pressing ESC)
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && draggedElement) {
+        stopAutoScroll();
+    }
+});
+
+// Custom Image Delete Confirmation Dialog
+function showImageDeleteConfirmation(onConfirm) {
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'confirmation-overlay';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 10000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    `;
+
+    // Create dialog
+    const dialog = document.createElement('div');
+    dialog.className = 'confirmation-dialog';
+    dialog.style.cssText = `
+        background: white;
+        border-radius: 8px;
+        padding: 24px;
+        max-width: 400px;
+        min-width: 300px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        text-align: center;
+    `;
+
+    dialog.innerHTML = `
+        <h3 style="margin: 0 0 16px 0; color: #333;">Remove Image</h3>
+        <p style="margin: 0 0 20px 0; color: #666;">Are you sure you want to remove this image?</p>
+        
+        <div style="margin: 20px 0;">
+            <label style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; color: #666; cursor: pointer;">
+                <input type="checkbox" id="dont-ask-again" style="margin: 0;">
+                Don't ask again
+            </label>
+        </div>
+        
+        <div style="display: flex; gap: 12px; justify-content: center;">
+            <button id="cancel-delete" style="
+                padding: 8px 20px;
+                border: 1px solid #ddd;
+                background: white;
+                border-radius: 4px;
+                cursor: pointer;
+                color: #666;
+            ">Cancel</button>
+            <button id="confirm-delete" style="
+                padding: 8px 20px;
+                border: none;
+                background: #dc3545;
+                color: white;
+                border-radius: 4px;
+                cursor: pointer;
+            ">Remove</button>
+        </div>
+    `;
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    // Handle buttons
+    const cancelBtn = dialog.querySelector('#cancel-delete');
+    const confirmBtn = dialog.querySelector('#confirm-delete');
+    const dontAskCheckbox = dialog.querySelector('#dont-ask-again');
+
+    cancelBtn.addEventListener('click', () => {
+        document.body.removeChild(overlay);
+    });
+
+    confirmBtn.addEventListener('click', () => {
+        // Save preference if checkbox is checked
+        if (dontAskCheckbox.checked) {
+            localStorage.setItem('skipImageDeleteConfirm', 'true');
+        }
+        
+        document.body.removeChild(overlay);
+        onConfirm();
+    });
+
+    // Close on overlay click
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            document.body.removeChild(overlay);
+        }
+    });
+
+    // Close on escape key
+    const escapeHandler = (e) => {
+        if (e.key === 'Escape') {
+            document.body.removeChild(overlay);
+            document.removeEventListener('keydown', escapeHandler);
+        }
+    };
+    document.addEventListener('keydown', escapeHandler);
+}
+
+// Function to reset the "don't ask again" preference
+function resetImageDeleteConfirmation() {
+    localStorage.removeItem('skipImageDeleteConfirm');
+    showMessage('Image deletion confirmations will now be shown again', 'info');
+}
+
+// Collapsible Template Info Section
+function toggleTemplateInfoSection() {
+    const content = document.getElementById('template-info-content');
+    const arrow = document.getElementById('template-info-arrow');
+    
+    if (content && arrow) {
+        const isCollapsed = content.classList.contains('collapsed');
+        
+        if (isCollapsed) {
+            // Expand
+            content.classList.remove('collapsed');
+            arrow.classList.remove('collapsed');
+            arrow.textContent = '▼';
+            // Set a high max-height to allow natural expansion
+            content.style.maxHeight = '1000px';
+        } else {
+            // Collapse
+            // First set the current height, then transition to 0
+            const currentHeight = content.scrollHeight;
+            content.style.maxHeight = currentHeight + 'px';
+            
+            // Force a reflow
+            content.offsetHeight;
+            
+            // Then collapse
+            content.classList.add('collapsed');
+            arrow.classList.add('collapsed');
+            arrow.textContent = '▶';
+            content.style.maxHeight = '0px';
+        }
+        
+        // Save collapse state to localStorage
+        localStorage.setItem('templateInfoCollapsed', !isCollapsed);
+    }
+}
+
+// Initialize collapse state on page load
+function initializeTemplateInfoSection() {
+    const isCollapsed = localStorage.getItem('templateInfoCollapsed') === 'true';
+    const content = document.getElementById('template-info-content');
+    const arrow = document.getElementById('template-info-arrow');
+    
+    if (isCollapsed && content && arrow) {
+        content.classList.add('collapsed');
+        arrow.classList.add('collapsed');
+        arrow.textContent = '▶';
+    }
+}

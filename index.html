@@ -307,7 +307,7 @@
         };
         
         // User likes storage
-        let userLikes = [];
+        let userLikes = JSON.parse(localStorage.getItem('template_likes') || '[]');
 
         document.addEventListener('DOMContentLoaded', async function() {
             // Initialize GitHub storage
@@ -549,7 +549,7 @@
                 <div class="template-image">
                     <img src="${thumbnailImage}" alt="${template.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=\\"http://www.w3.org/2000/svg\\" width=\\"120\\" height=\\"120\\" fill=\\"%23666\\"><rect width=\\"120\\" height=\\"120\\"/><text x=\\"60\\" y=\\"60\\" text-anchor=\\"middle\\" dy=\\".3em\\" fill=\\"white\\">No Image</text></svg>'">
                     <div class="template-actions">
-                        <button class="like-btn ${isLiked ? 'liked' : ''}" onclick="toggleLike('${template.id}', this, '${section}')" ${!githubStorage.authenticated ? 'disabled title="Login to like templates"' : ''}>
+                        <button class="like-btn ${isLiked ? 'liked' : ''}" onclick="toggleLike('${template.id}', this, '${section}')">>
                             ${isLiked ? '❤️' : '🤍'} <span class="like-count">${likesCount}</span>
                         </button>
                     </div>
@@ -570,32 +570,38 @@
         }
 
         async function toggleLike(templateId, buttonElement, section) {
-            if (!githubStorage.authenticated) {
-                alert('Please login to like templates');
-                return;
-            }
-            
             try {
-                const result = await githubStorage.likeTemplate(templateId);
-                const likeCountSpan = buttonElement.querySelector('.like-count');
+                // Use localStorage for likes since GitHub Pages can't write to GitHub API
+                let userLikes = JSON.parse(localStorage.getItem('template_likes') || '[]');
+                let templateLikes = JSON.parse(localStorage.getItem('template_like_counts') || '{}');
                 
-                if (result.liked) {
-                    buttonElement.classList.add('liked');
-                    buttonElement.innerHTML = `❤️ <span class="like-count">${result.totalLikes}</span>`;
-                    userLikes.push(templateId);
-                } else {
-                    buttonElement.classList.remove('liked');
-                    buttonElement.innerHTML = `🤍 <span class="like-count">${result.totalLikes}</span>`;
+                const isCurrentlyLiked = userLikes.includes(templateId);
+                
+                if (isCurrentlyLiked) {
+                    // Unlike
                     userLikes = userLikes.filter(id => id !== templateId);
+                    templateLikes[templateId] = Math.max(0, (templateLikes[templateId] || 0) - 1);
+                    buttonElement.classList.remove('liked');
+                    buttonElement.innerHTML = `🤍 <span class="like-count">${templateLikes[templateId] || 0}</span>`;
+                } else {
+                    // Like
+                    userLikes.push(templateId);
+                    templateLikes[templateId] = (templateLikes[templateId] || 0) + 1;
+                    buttonElement.classList.add('liked');
+                    buttonElement.innerHTML = `❤️ <span class="like-count">${templateLikes[templateId]}</span>`;
                 }
+                
+                // Save to localStorage
+                localStorage.setItem('template_likes', JSON.stringify(userLikes));
+                localStorage.setItem('template_like_counts', JSON.stringify(templateLikes));
                 
                 // Update the template object in the appropriate array
                 if (section === 'recent') {
                     const template = recentTemplates.find(t => t.id === templateId);
-                    if (template) template.likes = result.totalLikes;
+                    if (template) template.likes = templateLikes[templateId] || 0;
                 } else {
                     const template = categoryTemplates[section].find(t => t.id === templateId);
-                    if (template) template.likes = result.totalLikes;
+                    if (template) template.likes = templateLikes[templateId] || 0;
                 }
                 
             } catch (error) {
@@ -627,18 +633,12 @@
         }
 
         async function loadLikesForTemplates(templates) {
-            try {
-                for (const template of templates) {
-                    const likesData = await githubStorage.getTemplateLikes(template.id);
-                    template.likes = likesData.likes || 0;
-                }
-            } catch (error) {
-                console.error('Error loading likes data:', error);
-                // Set default likes to 0 if loading fails
-                templates.forEach(template => {
-                    template.likes = 0;
-                });
-            }
+            // Load likes from localStorage instead of GitHub API
+            const templateLikes = JSON.parse(localStorage.getItem('template_like_counts') || '{}');
+            
+            templates.forEach(template => {
+                template.likes = templateLikes[template.id] || 0;
+            });
         }
 
         function displayRecentTemplates() {

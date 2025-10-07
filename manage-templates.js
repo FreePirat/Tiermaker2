@@ -205,13 +205,16 @@ async function confirmDelete() {
         let deletedFromGitHub = false;
         let attemptedGitHubDelete = false;
         
-        // Always try to delete from GitHub if user is authenticated
-        // This handles both public templates and local templates that might exist on GitHub
-        if (githubStorage.authenticated) {
+        // Check if this template was originally shared publicly
+        const wasSharedPublicly = template.isPublic || template.public || template.source === 'public';
+        
+        // Try to delete from GitHub if user is authenticated and template was shared publicly
+        if (githubStorage.authenticated && wasSharedPublicly) {
             try {
-                await githubStorage.deleteTemplate(templateToDelete);
+                const result = await githubStorage.deleteTemplate(templateToDelete);
                 deletedFromGitHub = true;
                 attemptedGitHubDelete = true;
+                console.log('Public template deletion PR created:', result.pullRequestUrl);
             } catch (error) {
                 attemptedGitHubDelete = true;
                 // If the error is "Template not found", it means it wasn't on GitHub anyway
@@ -234,11 +237,15 @@ async function confirmDelete() {
             
             // Show appropriate success message
             if (deletedFromGitHub) {
-                showMessage('Template deleted from both GitHub and locally!', 'success');
+                if (wasSharedPublicly) {
+                    showMessage('Template deleted locally and deletion request submitted to GitHub! The public template will be removed after review.', 'success');
+                } else {
+                    showMessage('Template deleted successfully!', 'success');
+                }
             } else if (attemptedGitHubDelete && !deletedFromGitHub) {
                 showMessage('Template deleted locally! (Note: GitHub deletion failed or template not found on GitHub)', 'warning');
-            } else if (!githubStorage.authenticated) {
-                showMessage('Template deleted locally! (Login to also delete from GitHub if it exists there)', 'warning');
+            } else if (!githubStorage.authenticated && wasSharedPublicly) {
+                showMessage('Template deleted locally! (Login with GitHub to also request deletion of the public template)', 'warning');
             } else {
                 showMessage('Local template deleted successfully!', 'success');
             }

@@ -41,49 +41,64 @@
 
         <main class="creator-main">
             <!-- Template Name Input -->
-            <div class="template-info">
-                <input type="text" id="template-name" class="template-name-input" placeholder="Enter template name..." maxlength="100">
-                <textarea id="template-description" class="template-description-input" placeholder="Enter template description (optional)..." maxlength="500"></textarea>
-                
-                <!-- Category Selection -->
-                <div class="template-field">
-                    <label for="template-category" class="field-label">Category:</label>
-                    <select id="template-category" class="template-category-select">
-                        <option value="">Select a category (optional)</option>
-                        <option value="gaming">🎮 Gaming</option>
-                        <option value="OCs">🌟 OCs</option>
-                        <option value="movies">🎬 Movies & TV</option>
-                        <option value="music">🎵 Music</option>
-                        <option value="food">🍕 Food & Drinks</option>
-                    </select>
+            <div class="template-info-section">
+                <div class="section-header" onclick="toggleTemplateInfoSection()">
+                    <h3>📝 Template Information</h3>
+                    <span class="collapse-arrow" id="template-info-arrow">▼</span>
                 </div>
+                <div class="template-info" id="template-info-content">
+                    <input type="text" id="template-name" class="template-name-input" placeholder="Enter template name..." maxlength="100">
+                    <textarea id="template-description" class="template-description-input" placeholder="Enter template description (optional)..." maxlength="500"></textarea>
+                    
+                    <!-- Category Selection -->
+                    <div class="template-field">
+                        <label for="template-category" class="field-label">Category:</label>
+                        <select id="template-category" class="template-category-select">
+                            <option value="">Select a category (optional)</option>
+                            <option value="gaming">🎮 Gaming</option>
+                            <option value="OCs">🌟 OCs</option>
+                            <option value="movies">🎬 Movies & TV</option>
+                            <option value="music">🎵 Music</option>
+                            <option value="food">🍕 Food & Drinks</option>
+                        </select>
+                    </div>
 
-                <!-- Thumbnail Selection -->
-                <div class="template-field">
-                    <label class="field-label">Template Thumbnail:</label>
-                    <div class="thumbnail-selection">
-                        <div class="thumbnail-preview">
-                            <img id="selected-thumbnail" src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='80' fill='%23666'><rect width='120' height='80'/><text x='60' y='40' text-anchor='middle' dy='.3em' fill='white' font-size='12'>No Thumbnail</text></svg>" alt="Template thumbnail">
-                        </div>
-                        <div class="thumbnail-controls">
-                            <p class="thumbnail-hint">Select an image from your uploaded images, or upload a custom thumbnail</p>
-                            <div class="thumbnail-upload-section">
-                                <input type="file" id="thumbnail-upload" accept="image/*" style="display: none;">
-                                <button type="button" id="upload-thumbnail-btn" class="thumbnail-btn">📁 Upload Custom Thumbnail</button>
-                                <button type="button" id="clear-thumbnail-btn" class="thumbnail-btn secondary">🗑️ Clear Thumbnail</button>
+                    <!-- Thumbnail Selection -->
+                    <div class="template-field">
+                        <label class="field-label">Template Thumbnail:</label>
+                        <div class="thumbnail-selection">
+                            <div class="thumbnail-preview">
+                                <img id="selected-thumbnail" src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='80' fill='%23666'><rect width='120' height='80'/><text x='60' y='40' text-anchor='middle' dy='.3em' fill='white' font-size='12'>No Thumbnail</text></svg>" alt="Template thumbnail">
                             </div>
+                            <div class="thumbnail-controls">
+                                <p class="thumbnail-hint">Select an image from your uploaded images, or upload a custom thumbnail</p>
+                                <div class="thumbnail-upload-section">
+                                    <input type="file" id="thumbnail-upload" accept="image/*" style="display: none;">
+                                    <button type="button" id="upload-thumbnail-btn" class="thumbnail-btn">📁 Upload Custom Thumbnail</button>
+                                    <button type="button" id="clear-thumbnail-btn" class="thumbnail-btn secondary">🗑️ Clear Thumbnail</button>
+                                </div>
 
+                            </div>
                         </div>
                     </div>
+                    
+                    <div class="sharing-options">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="share-publicly" class="share-checkbox">
+                            <span class="checkmark"></span>
+                            Share this template publicly (requires GitHub login)
+                        </label>
+                        <div id="auth-status-indicator" class="auth-indicator"></div>
+                    </div>
                 </div>
-                
-                <div class="sharing-options">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="share-publicly" class="share-checkbox">
-                        <span class="checkmark"></span>
-                        Share this template publicly (requires GitHub login)
-                    </label>
-                    <div id="auth-status-indicator" class="auth-indicator"></div>
+            </div>
+
+            <!-- Tier Management Controls -->
+            <div class="tier-management-section">
+                <div class="tier-management">
+                    <button class="control-btn" onclick="addTierRow()">➕ Add Tier</button>
+                    <button class="control-btn" onclick="removeTierRow()">➖ Remove Tier</button>
+                    <button class="control-btn" onclick="resetTierList()">🔄 Reset</button>
                 </div>
             </div>
 
@@ -141,6 +156,8 @@
                         <div class="pool-controls">
                             <button class="control-btn" onclick="clearAllImages()">🗑️ Clear All</button>
                             <button class="control-btn" onclick="randomizeImages()">🎲 Randomize</button>
+                            <button class="control-btn" id="pin-pool-btn" onclick="togglePinnedPool()" title="Pin character pool to bottom of screen">📌 Pin Pool</button>
+                            <button class="control-btn secondary" onclick="resetImageDeleteConfirmation()" title="Reset image deletion confirmation settings">🔔 Reset Confirmations</button>
                         </div>
                     </div>
                     <div class="image-pool-container"></div>
@@ -157,11 +174,6 @@
 
             <!-- Controls -->
             <div class="controls">
-                <div class="left-controls">
-                    <button class="control-btn" onclick="addTierRow()">➕ Add Tier</button>
-                    <button class="control-btn" onclick="removeTierRow()">➖ Remove Tier</button>
-                    <button class="control-btn" onclick="resetTierList()">🔄 Reset</button>
-                </div>
                 
                 <div class="center-controls">
                     
@@ -183,6 +195,18 @@
         <footer class="main-footer">
             <p>© 2025 tiermaker2.com</p>
         </footer>
+    </div>
+
+    <!-- Pinned Character Pool -->
+    <div id="pinned-pool" class="pinned-pool hidden">
+        <div class="pinned-pool-header">
+            <h4>📌 Pinned Characters</h4>
+            <button class="unpin-btn" onclick="togglePinnedPool()" title="Unpin character pool">❌</button>
+        </div>
+        <div class="pinned-pool-container">
+            <div class="pinned-pool-row"></div>
+            <div class="pinned-pool-row"></div>
+        </div>
     </div>
 
     <script src="tier-list-creator.js"></script>

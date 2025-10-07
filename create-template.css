@@ -274,6 +274,8 @@
     position: relative;
     transition: all 0.2s ease;
     border: 2px solid transparent;
+    /* Ensure proper vertical alignment */
+    align-items: stretch;
 }
 
 .tier-row:hover {
@@ -284,7 +286,7 @@
 
 .tier-label {
     width: 80px;
-    height: 80px;
+    min-height: 80px;
     background-color: #ff6b9d;
     color: white;
     display: flex;
@@ -314,6 +316,8 @@
     box-sizing: border-box;
     max-width: 80px;
     overflow: hidden;
+    /* Make the label grow with the row */
+    align-self: stretch;
 }
 
 .tier-label:focus {
@@ -395,6 +399,8 @@
     min-height: 80px;
     background-color: #404040;
     transition: background-color 0.2s ease;
+    /* Ensure the container can grow vertically */
+    align-self: stretch;
 }
 
 .tier-items.drag-over {
@@ -736,10 +742,248 @@
     color: #dc3545;
 }
 
+/* Tier Management Controls */
+.tier-management {
+    margin-top: 15px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.tier-management .control-btn {
+    background: linear-gradient(135deg, #2a1810, #3d2518);
+    color: #ff6b9d;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.tier-management .control-btn:hover {
+    background: linear-gradient(135deg, #3d2518, #4a2b1a);
+    border-color: #ff6b9d;
+    transform: translateY(-1px);
+}
+
+.tier-management .control-btn:active {
+    transform: translateY(0);
+}
+
+/* Collapsible Template Info Section */
+.template-info-section {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    margin-bottom: 20px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, rgba(255, 107, 157, 0.2), rgba(147, 51, 234, 0.2));
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.section-header:hover {
+    background: linear-gradient(135deg, rgba(255, 107, 157, 0.3), rgba(147, 51, 234, 0.3));
+}
+
+.section-header h3 {
+    margin: 0;
+    color: white;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.collapse-arrow {
+    font-size: 16px;
+    color: white;
+    transition: transform 0.3s ease;
+    user-select: none;
+}
+
+.collapse-arrow.collapsed {
+    transform: rotate(-90deg);
+}
+
+.template-info {
+    padding: 20px;
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.template-info.collapsed {
+    padding: 0 20px;
+    opacity: 0;
+}
+
+/* Tier Management Section */
+.tier-management-section {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tier-management-section .tier-management {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+}
+
 @media (max-width: 768px) {
     .sharing-options {
         flex-direction: column;
         align-items: flex-start;
         gap: 10px;
+    }
+}
+
+/* Pinned Character Pool Styles */
+.pinned-pool {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(135deg, #2c1810, #1a0f08);
+    border-top: 3px solid #ff6b9d;
+    box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    max-height: 200px;
+    transition: transform 0.3s ease;
+}
+
+.pinned-pool.hidden {
+    transform: translateY(100%);
+}
+
+.pinned-pool-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 16px;
+    background: rgba(0, 0, 0, 0.2);
+    border-bottom: 1px solid #444;
+}
+
+.pinned-pool-header h4 {
+    margin: 0;
+    color: #ff6b9d;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.unpin-btn {
+    background: transparent;
+    border: none;
+    color: #ccc;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.unpin-btn:hover {
+    background: rgba(255, 107, 157, 0.2);
+    color: #ff6b9d;
+}
+
+.pinned-pool-container {
+    padding: 8px;
+    max-height: 140px;
+    overflow-y: auto;
+}
+
+.pinned-pool-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+    min-height: 60px;
+    flex-wrap: wrap;
+    align-content: flex-start;
+}
+
+.pinned-pool-row:last-child {
+    margin-bottom: 0;
+}
+
+.pinned-character {
+    width: 60px;
+    height: 60px;
+    border-radius: 8px;
+    cursor: grab;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+    position: relative;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.pinned-character:hover {
+    transform: scale(1.05);
+    border-color: #ff6b9d;
+    box-shadow: 0 2px 10px rgba(255, 107, 157, 0.3);
+}
+
+.pinned-character:active {
+    cursor: grabbing;
+    transform: scale(0.95);
+}
+
+.pinned-character img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 6px;
+    pointer-events: none;
+    display: block;
+}
+
+/* Pin button styling */
+#pin-pool-btn {
+    position: relative;
+}
+
+#pin-pool-btn.active {
+    background: rgba(255, 107, 157, 0.2);
+    color: #ff6b9d;
+    border-color: #ff6b9d;
+}
+
+/* Add padding to body when pinned pool is visible */
+body.pinned-pool-active {
+    padding-bottom: 200px;
+}
+
+/* Responsive pinned pool */
+@media (max-width: 768px) {
+    .pinned-pool {
+        max-height: 160px;
+    }
+    
+    .pinned-pool-container {
+        max-height: 100px;
+    }
+    
+    .pinned-character {
+        width: 50px;
+        height: 50px;
+    }
+    
+    body.pinned-pool-active {
+        padding-bottom: 160px;
     }
 }
