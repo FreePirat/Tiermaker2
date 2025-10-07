@@ -7,10 +7,10 @@ let templateToDelete = null;
 function saveTemplates() {
     try {
         if (typeof(Storage) !== "undefined") {
-            // Save only non-public templates to localStorage (local templates only)
-            // Public templates are managed through GitHub and loaded dynamically
-            const localTemplates = templates.filter(t => !t.isPublic);
-            localStorage.setItem('tierTemplates', JSON.stringify(localTemplates));
+            // Save ALL templates to localStorage, including public ones
+            // This ensures proper tracking for deletion purposes
+            // Public templates need to be tracked locally so we know to delete them from GitHub too
+            localStorage.setItem('tierTemplates', JSON.stringify(templates));
             return true;
         } else {
             showMessage('Cannot save: Local storage not supported', 'error');
@@ -39,14 +39,27 @@ async function loadUserPublicTemplates() {
         try {
             const userPublicTemplates = await githubStorage.getUserTemplates();
             
-            // Mark public templates and merge with local templates
+            // Mark public templates and merge with local templates, avoiding duplicates
             userPublicTemplates.forEach(template => {
                 template.isPublic = true;
+                template.public = true;
+                
                 // Check if we already have this template locally
                 const existingIndex = templates.findIndex(t => t.id === template.id);
                 if (existingIndex >= 0) {
-                    // Update local version with public version (it's more recent)
-                    templates[existingIndex] = template;
+                    // Update local version with public version if it's more recent or has more data
+                    const localTemplate = templates[existingIndex];
+                    const publicUpdatedAt = new Date(template.updatedAt || template.createdAt || 0);
+                    const localUpdatedAt = new Date(localTemplate.updatedAt || localTemplate.createdAt || 0);
+                    
+                    // Use the more recent version, but prefer the public version if dates are equal
+                    if (publicUpdatedAt >= localUpdatedAt) {
+                        templates[existingIndex] = template;
+                    } else {
+                        // Keep local version but ensure it's marked as public
+                        templates[existingIndex].isPublic = true;
+                        templates[existingIndex].public = true;
+                    }
                 } else {
                     // Add new public template
                     templates.push(template);
@@ -208,9 +221,20 @@ async function confirmDelete() {
         // Check if this template was originally shared publicly
         const wasSharedPublicly = template.isPublic || template.public || template.source === 'public';
         
+        console.log('Deleting template:', {
+            id: templateToDelete,
+            name: template.name,
+            wasSharedPublicly,
+            isPublic: template.isPublic,
+            public: template.public,
+            source: template.source,
+            authenticated: githubStorage.authenticated
+        });
+        
         // Try to delete from GitHub if user is authenticated and template was shared publicly
         if (githubStorage.authenticated && wasSharedPublicly) {
             try {
+                console.log('Attempting to delete public template from GitHub...');
                 const result = await githubStorage.deleteTemplate(templateToDelete);
                 deletedFromGitHub = true;
                 attemptedGitHubDelete = true;
@@ -228,30 +252,29 @@ async function confirmDelete() {
                     console.error('GitHub deletion error:', error);
                 }
             }
+        } else if (!githubStorage.authenticated && wasSharedPublicly) {
+            console.log('Template was shared publicly but user is not authenticated - can only delete locally');
+        } else {
+            console.log('Template is local-only, no GitHub deletion needed');
         }
         
         // Remove from local array (both public and local templates)
         templates = templates.filter(t => t.id !== templateToDelete);
         
-        // Save remaining local templates to localStorage
-        // (saveTemplates automatically filters out public templates)
+        // Save remaining templates to localStorage
         if (saveTemplates()) {
             renderTemplates();
             closeDeleteModal();
             
             // Show appropriate success message
             if (deletedFromGitHub) {
-                if (wasSharedPublicly) {
-                    showMessage('Template deleted locally and deletion request submitted to GitHub! The public template will be removed after review.', 'success');
-                } else {
-                    showMessage('Template deleted successfully!', 'success');
-                }
+                showMessage('Template deleted locally and deletion request submitted to GitHub! The public template will be removed after review.', 'success');
             } else if (attemptedGitHubDelete && !deletedFromGitHub) {
                 showMessage('Template deleted locally! (Note: GitHub deletion failed or template not found on GitHub)', 'warning');
             } else if (!githubStorage.authenticated && wasSharedPublicly) {
                 showMessage('Template deleted locally! (Login with GitHub to also request deletion of the public template)', 'warning');
             } else {
-                showMessage('Local template deleted successfully!', 'success');
+                showMessage('Template deleted successfully!', 'success');
             }
         }
     } catch (error) {

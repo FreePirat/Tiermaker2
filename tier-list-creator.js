@@ -1260,15 +1260,19 @@ async function saveTemplate() {
         currentTemplate.id = 'template_' + Date.now();
     }
     
+    // Mark template as public if sharing publicly
+    if (sharePublicly) {
+        currentTemplate.public = true;
+        currentTemplate.isPublic = true;
+    }
+
     // Save locally first
     const existingIndex = templates.findIndex(t => t.id === currentTemplate.id);
     if (existingIndex >= 0) {
         templates[existingIndex] = { ...currentTemplate };
     } else {
         templates.push({ ...currentTemplate });
-    }
-    
-    // Save to localStorage with error handling
+    }    // Save to localStorage with error handling
     try {
         if (typeof(Storage) !== "undefined") {
             const dataToStore = JSON.stringify(templates);
@@ -1282,7 +1286,7 @@ async function saveTemplate() {
                 
                 // Offer to clean up old LOCAL templates only
                 const oldLocalTemplates = templates.filter(t => 
-                    !t.isPublic && // Only clean up local templates, not public ones
+                    !t.isPublic && !t.public && // Only clean up local templates, not public ones
                     Date.now() - new Date(t.id.split('_')[1]).getTime() > 30 * 24 * 60 * 60 * 1000 // 30 days
                 );
                 
@@ -1290,18 +1294,18 @@ async function saveTemplate() {
                     const cleanup = confirm(`Storage is getting full (${sizeInMB}MB). Delete ${oldLocalTemplates.length} old local templates older than 30 days?`);
                     if (cleanup) {
                         templates = templates.filter(t => !oldLocalTemplates.includes(t));
-                        // Save only local templates to localStorage (same logic as saveTemplates in manage-templates.js)
-                        const localTemplates = templates.filter(t => !t.isPublic);
-                        localStorage.setItem('tierTemplates', JSON.stringify(localTemplates));
+                        // Save all templates to localStorage, including public ones for proper deletion tracking
+                        localStorage.setItem('tierTemplates', JSON.stringify(templates));
                         showMessage(`Cleaned up ${oldLocalTemplates.length} old local templates`, 'info');
                         return; // Exit early since we already saved
                     }
                 }
             }
             
-            // Save only local templates to localStorage (same logic as manage-templates.js)
-            const localTemplates = templates.filter(t => !t.isPublic);
-            localStorage.setItem('tierTemplates', JSON.stringify(localTemplates));
+            // Save ALL templates to localStorage, including public ones for proper deletion tracking
+            // This ensures that when a user deletes a template they created and shared publicly,
+            // the manage-templates.js can properly identify it as public and delete from GitHub too
+            localStorage.setItem('tierTemplates', JSON.stringify(templates));
         } else {
             showMessage('Cannot save: Local storage not supported', 'error');
             return;
