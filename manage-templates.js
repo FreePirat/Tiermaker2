@@ -217,11 +217,15 @@ async function confirmDelete() {
                 console.log('Public template deletion PR created:', result.pullRequestUrl);
             } catch (error) {
                 attemptedGitHubDelete = true;
-                // If the error is "Template not found", it means it wasn't on GitHub anyway
+                console.error('Failed to delete from GitHub:', error);
+                
+                // Handle specific error types
                 if (error.message && error.message.includes('Template not found')) {
                     console.log('Template was not on GitHub, only deleting locally');
+                } else if (error.message && error.message.includes('Authentication required')) {
+                    console.log('Authentication required for GitHub deletion');
                 } else {
-                    console.error('Failed to delete from GitHub:', error);
+                    console.error('GitHub deletion error:', error);
                 }
             }
         }

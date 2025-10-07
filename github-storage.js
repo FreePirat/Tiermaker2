@@ -677,6 +677,236 @@ This template has been automatically submitted via TierMaker2 and will be auto-m
         localStorage.setItem('template_likes', JSON.stringify(templateLikes));
     }
 
+    // Delete a template via Fork + Pull Request workflow
+    async deleteTemplate(templateId) {
+        if (!this.authenticated) {
+            throw new Error('Authentication required to delete public templates');
+        }
+
+        console.log('Starting template deletion via Fork + PR for template ID:', templateId);
+        
+        try {
+            // Step 1: Check if template exists in the main repository
+            console.log('Step 1: Checking if template exists...');
+            const templateExists = await this.checkTemplateExists(templateId);
+            if (!templateExists) {
+                throw new Error('Template not found in the repository');
+            }
+
+            // Step 2: Fork the repository (if not already forked)
+            console.log('Step 2: Creating/checking fork...');
+            const fork = await this.createFork();
+            
+            // Step 3: Delete the template file in the fork
+            console.log('Step 3: Deleting template from fork...');
+            await this.deleteFileInFork(`${templateId}.json`, fork.owner.login);
+            
+            // Step 4: Create Pull Request for deletion
+            console.log('Step 4: Creating deletion Pull Request...');
+            const pr = await this.createDeletionPullRequest(templateId, fork.owner.login);
+            
+            return {
+                success: true,
+                pullRequestUrl: pr.html_url,
+                message: 'Template deletion submitted successfully! Your Pull Request is under review.'
+            };
+            
+        } catch (error) {
+            console.error('Error in template deletion workflow:', error);
+            
+            if (error.message.includes('Template not found')) {
+                throw new Error('Template not found in the repository. It may have already been deleted or was never shared publicly.');
+            } else if (error.message.includes('fork') || error.message.includes('repository')) {
+                throw new Error(
+                    'Unable to access fork. Please:\n' +
+                    '1. Make sure your GitHub token has "public_repo" scope\n' +
+                    '2. Try manually forking FreePirat/Tiermaker2 first\n' +
+                    '3. Then try deletion again'
+                );
+            }
+            
+            throw error;
+        }
+    }
+
+    // Check if a template exists in the main repository
+    async checkTemplateExists(templateId) {
+        try {
+            const response = await fetch(
+                `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${this.templatesPath}/${templateId}.json`,
+                {
+                    headers: {
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                }
+            );
+            
+            return response.ok;
+        } catch (error) {
+            console.error('Error checking template existence:', error);
+            return false;
+        }
+    }
+
+    // Delete template file in the user's fork
+    async deleteFileInFork(filename, forkOwner) {
+        const filePath = `${this.templatesPath}/${filename}`;
+        
+        // First, get the file to get its SHA
+        const getResponse = await fetch(
+            `${this.apiBase}/repos/${forkOwner}/${this.repo}/contents/${filePath}`,
+            {
+                headers: {
+                    'Authorization': `token ${this.accessToken}`,
+                    'Accept': 'application/vnd.github.v3+json'
+                }
+            }
+        );
+
+        if (!getResponse.ok) {
+            if (getResponse.status === 404) {
+                throw new Error('Template file not found in fork');
+            }
+            const errorData = await getResponse.json();
+            throw new Error(`Failed to get template file: ${errorData.message}`);
+        }
+
+        const fileData = await getResponse.json();
+        
+        // Delete the file
+        const deleteData = {
+            message: `Delete template: ${filename.replace('.json', '')}`,
+            sha: fileData.sha,
+            branch: this.branch
+        };
+
+        const deleteResponse = await fetch(
+            `${this.apiBase}/repos/${forkOwner}/${this.repo}/contents/${filePath}`,
+            {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `token ${this.accessToken}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(deleteData)
+            }
+        );
+
+        if (!deleteResponse.ok) {
+            const errorData = await deleteResponse.json();
+            throw new Error(`Failed to delete template file: ${errorData.message}`);
+        }
+
+        const result = await deleteResponse.json();
+        console.log('Template file deleted from fork');
+        return result;
+    }
+
+    // Create Pull Request for template deletion
+    async createDeletionPullRequest(templateId, forkOwner) {
+        const prTitle = `Delete template: ${templateId}`;
+        const prBody = `## Template Deletion Request
+
+**Template ID:** ${templateId}
+**Requested by:** @${this.currentUser?.login || 'Anonymous'}
+
+### Deletion Details
+This is an automated request to delete a template from the TierMaker2 repository.
+
+The template file \`${templateId}.json\` has been removed from the fork and this PR will delete it from the main repository if merged.
+
+### Auto-merge Criteria
+✅ Valid deletion request
+✅ Template file exists in repository
+✅ Only removes specified template file
+✅ No other files modified
+
+---
+*Submitted via TierMaker2 template manager*`;
+
+        const prData = {
+            title: prTitle,
+            body: prBody,
+            head: `${forkOwner}:${this.branch}`,
+            base: this.branch
+        };
+
+        console.log('Creating deletion PR with data:', prData);
+
+        const response = await fetch(
+            `${this.apiBase}/repos/${this.owner}/${this.repo}/pulls`,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `token ${this.accessToken}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(prData)
+            }
+        );
+
+        if (!response.ok) {
+            let errorData;
+            try {
+                errorData = await response.json();
+            } catch (parseError) {
+                throw new Error(`Failed to create deletion pull request: HTTP ${response.status} ${response.statusText}`);
+            }
+            
+            console.error('Deletion PR Creation Failed:', {
+                status: response.status,
+                statusText: response.statusText,
+                error: errorData,
+                prData: prData
+            });
+            
+            let errorMessage = `Failed to create deletion pull request: ${errorData.message || 'Unknown error'}`;
+            
+            if (response.status === 422) {
+                if (errorData.message.includes('No commits between')) {
+                    errorMessage = 'No changes detected. The template may have already been deleted.';
+                } else if (errorData.message.includes('head sha')) {
+                    errorMessage = 'Fork synchronization issue. Please wait a moment and try again.';
+                } else {
+                    errorMessage = `Validation Failed: ${errorData.message}`;
+                }
+            } else if (response.status === 403) {
+                errorMessage = 'Permission denied: Your GitHub token may need additional permissions.';
+            } else if (response.status === 404) {
+                errorMessage = 'Repository or fork not found. Please check that your fork exists.';
+            }
+            
+            throw new Error(errorMessage);
+        }
+
+        const pr = await response.json();
+        console.log('Deletion Pull Request created:', pr.html_url);
+        
+        // Add labels to the PR for easier tracking
+        try {
+            await fetch(
+                `${this.apiBase}/repos/${this.owner}/${this.repo}/issues/${pr.number}/labels`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `token ${this.accessToken}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(['template-deletion', 'auto-merge-candidate'])
+                }
+            );
+            console.log('Labels added to deletion PR');
+        } catch (labelError) {
+            console.warn('Could not add labels to deletion PR:', labelError);
+            // Non-critical, continue anyway
+        }
+        
+        return pr;
+    }
+
     // Save a file to GitHub (for repository collaborators only)
     async saveFileToGitHub(path, content, message) {
         if (!this.authenticated) {

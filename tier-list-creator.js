@@ -1329,53 +1329,84 @@ async function saveTemplate() {
                 if (result.pullRequestUrl) {
                     console.log('Pull Request URL:', result.pullRequestUrl);
                 }
+            } else if (result && result.local) {
+                showMessage('Template saved locally! (Public sharing not available)', 'success');
             } else {
                 showMessage('Template saved locally and submitted to repository!', 'success');
             }
         } catch (error) {
             console.error('Error submitting template:', error);
             
-            // Provide helpful error message and fallback
-            const useAlternative = confirm(
-                `Failed to submit template: ${error.message}\n\n` +
-                'Would you like to download your template as a JSON file instead?\n' +
-                'You can then manually fork the repository and add it yourself.\n\n' +
-                'Click OK to download, or Cancel to continue.'
-            );
-            
-            if (useAlternative) {
-                // Download the template as JSON
-                const templateData = {
-                    ...currentTemplate,
-                    createdAt: currentTemplate.createdAt || new Date().toISOString(),
-                    public: true,
-                    creator: null // No creator info since not saved via API
-                };
+            // Only show error dialog for genuine failures, not when local save succeeded
+            if (error.message.includes('Authentication required') || error.message.includes('token')) {
+                // Authentication-related errors - suggest alternative
+                const useAlternative = confirm(
+                    `Authentication required to submit template publicly.\n\n` +
+                    'Your template has been saved locally. Would you like to download it as a JSON file for manual submission?\n\n' +
+                    'Click OK to download, or Cancel to continue.'
+                );
                 
-                const blob = new Blob([JSON.stringify(templateData, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `${currentTemplate.id}.json`;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url);
+                if (useAlternative) {
+                    downloadTemplateAsJSON();
+                    showMessage('Template saved locally and downloaded! Check console for manual submission instructions.', 'success');
+                    logManualSubmissionInstructions();
+                } else {
+                    showMessage('Template saved locally! (GitHub authentication required for public sharing)', 'warning');
+                }
+            } else if (error.message.includes('fork') || error.message.includes('pull request') || error.message.includes('GitHub')) {
+                // GitHub-specific errors - offer download option
+                const useAlternative = confirm(
+                    `Failed to submit template: ${error.message}\n\n` +
+                    'Your template has been saved locally. Would you like to download it as a JSON file for manual submission?\n\n' +
+                    'Click OK to download, or Cancel to continue.'
+                );
                 
-                showMessage('Template saved locally and downloaded! Manual submission instructions in console.', 'success');
-                console.log('Manual submission instructions:');
-                console.log('1. Go to https://github.com/FreePirat/Tiermaker2');
-                console.log('2. Click "Fork" to create your own copy');
-                console.log('3. In your fork, go to the "templates" folder');
-                console.log('4. Click "Add file" > "Upload files"');
-                console.log('5. Upload the downloaded JSON file');
-                console.log('6. Create a Pull Request back to the main repository');
+                if (useAlternative) {
+                    downloadTemplateAsJSON();
+                    showMessage('Template saved locally and downloaded! Check console for manual submission instructions.', 'success');
+                    logManualSubmissionInstructions();
+                } else {
+                    showMessage('Template saved locally, but failed to submit publicly: ' + error.message, 'warning');
+                }
             } else {
-                showMessage('Template saved locally, but failed to submit publicly: ' + error.message, 'warning');
+                // Other errors - just show warning without interrupting workflow
+                showMessage('Template saved locally, but public submission failed: ' + error.message, 'warning');
+                console.error('Public submission error details:', error);
             }
         }
     } else {
         showMessage('Template saved locally!', 'success');
+    }
+
+    // Helper function to download template as JSON
+    function downloadTemplateAsJSON() {
+        const templateData = {
+            ...currentTemplate,
+            createdAt: currentTemplate.createdAt || new Date().toISOString(),
+            public: true,
+            creator: null // No creator info since not saved via API
+        };
+        
+        const blob = new Blob([JSON.stringify(templateData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${currentTemplate.id}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+    
+    // Helper function to log manual submission instructions
+    function logManualSubmissionInstructions() {
+        console.log('Manual submission instructions:');
+        console.log('1. Go to https://github.com/FreePirat/Tiermaker2');
+        console.log('2. Click "Fork" to create your own copy');
+        console.log('3. In your fork, go to the "templates" folder');
+        console.log('4. Click "Add file" > "Upload files"');
+        console.log('5. Upload the downloaded JSON file');
+        console.log('6. Create a Pull Request back to the main repository');
     }
     
     // Redirect after short delay
