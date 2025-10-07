@@ -7,7 +7,7 @@ on:
       - 'templates/*.json'
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
   issues: write
 
@@ -166,11 +166,30 @@ jobs:
       run: |
         echo "All validations passed. Attempting to merge template..."
         
-        # Try to merge the PR directly
+        # Add validation labels first
+        gh pr edit ${{ github.event.pull_request.number }} --add-label "validation-passed"
+        
+        # Try to merge the PR directly with auto-merge
+        echo "Attempting automatic merge..."
         if gh pr merge ${{ github.event.pull_request.number }} --squash --delete-branch; then
           echo "✅ PR #${{ github.event.pull_request.number }} successfully merged!"
+          
+          # Add success comment after merge
+          gh pr comment ${{ github.event.pull_request.number }} --body "🎉 **Template validation passed and PR merged!** ✅
+
+          Your template has been automatically validated and **successfully merged** into the main repository!
+
+          **Validation Results:**
+          - ✅ Valid JSON structure
+          - ✅ Required fields present
+          - ✅ Template ID matches filename
+          - ✅ Within size limits
+          - ✅ Safe changes only
+
+          Your template is now live and available to all TierMaker2 users! Thank you for your contribution! 🚀"
+          
         else
-          echo "⚠️ Auto-merge failed due to permissions. Adding ready-to-merge label..."
+          echo "⚠️ Auto-merge failed. Adding ready-to-merge label..."
           gh pr edit ${{ github.event.pull_request.number }} --add-label "ready-to-merge"
           
           gh pr comment ${{ github.event.pull_request.number }} --body "🤖 **Automated validation completed successfully!** ✅
@@ -186,14 +205,6 @@ jobs:
 
           This template is ready for immediate merging! 🚀"
         fi
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Add validation labels
-      if: env.VALIDATION_PASSED == 'true' && env.SAFE_CHANGES == 'true'
-      run: |
-        # Add labels to indicate validation passed
-  gh pr edit ${{ github.event.pull_request.number }} --add-label "validation-passed"
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -229,26 +240,5 @@ jobs:
         
         # Add failure label
         gh pr edit ${{ github.event.pull_request.number }} --add-label "validation-failed"
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Add success comment
-      if: env.VALIDATION_PASSED == 'true' && env.SAFE_CHANGES == 'true'
-      run: |
-        # This comment is only added if the merge step above succeeded
-        if gh pr view ${{ github.event.pull_request.number }} --json state --jq '.state' | grep -q "MERGED"; then
-          gh pr comment ${{ github.event.pull_request.number }} --body "🎉 **Template validation passed and PR merged!** ✅
-
-          Your template has been automatically validated and **successfully merged** into the main repository!
-
-          **Validation Results:**
-          - ✅ Valid JSON structure
-          - ✅ Required fields present
-          - ✅ Template ID matches filename
-          - ✅ Within size limits
-          - ✅ Safe changes only
-
-          Your template is now live and available to all TierMaker2 users! Thank you for your contribution! 🚀"
-        fi
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
