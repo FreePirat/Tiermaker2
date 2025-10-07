@@ -1,5 +1,8 @@
 // Tier List Creator JavaScript
 
+// Constants
+const MAX_TIER_LABEL_LENGTH = 35; // Character limit for tier labels
+
 let draggedElement = null;
 let templates = [];
 let currentTemplate = {
@@ -28,50 +31,315 @@ function getDefaultTierColor(label) {
     return defaultColors[label] || '#ff6b9d'; // Default pink for any other tiers
 }
 
-// Auto-resize tier label text to fit container
+// Auto-resize tier label text to fit in the available container space with overflow protection
 function autoResizeTierLabel(label) {
-    const text = label.textContent || label.innerText;
-    const textLength = text.length;
+    let text = label.textContent || label.innerText;
     
-    // Calculate font size based on text length
-    let fontSize;
-    if (textLength <= 3) {
-        fontSize = 24; // Default size for short text
-    } else if (textLength <= 6) {
-        fontSize = 20;
-    } else if (textLength <= 10) {
-        fontSize = 16;
-    } else if (textLength <= 15) {
-        fontSize = 14;
-    } else if (textLength <= 20) {
-        fontSize = 12;
-    } else {
-        fontSize = 10; // Minimum size for very long text
+    // Get the actual dimensions of the tier label
+    const labelHeight = label.offsetHeight || 80;
+    const labelWidth = 70; // 80px width - 10px padding = 70px usable width
+    
+    // Calculate height-based multiplier (more height = allow bigger text and more characters)
+    const heightMultiplier = Math.max(1, Math.min(2.5, labelHeight / 80));
+    
+    // Dynamic character limit based on available height
+    const baseCharLimit = 35;
+    const heightBasedCharLimit = Math.floor(baseCharLimit * heightMultiplier);
+    const dynamicCharLimit = Math.min(60, heightBasedCharLimit);
+    
+    // Enforce dynamic character limit
+    if (text.length > dynamicCharLimit) {
+        text = text.substring(0, dynamicCharLimit);
+        label.textContent = text;
     }
     
+    // Start with base font size calculation
+    const textLength = text.length;
+    let baseFontSize;
+    
+    if (textLength <= 2) {
+        baseFontSize = 28;
+    } else if (textLength <= 4) {
+        baseFontSize = 24;
+    } else if (textLength <= 6) {
+        baseFontSize = 20;
+    } else if (textLength <= 8) {
+        baseFontSize = 18;
+    } else if (textLength <= 12) {
+        baseFontSize = 16;
+    } else if (textLength <= 16) {
+        baseFontSize = 14;
+    } else if (textLength <= 20) {
+        baseFontSize = 12;
+    } else if (textLength <= 25) {
+        baseFontSize = 11;
+    } else if (textLength <= 35) {
+        baseFontSize = 10;
+    } else if (textLength <= 45) {
+        baseFontSize = 9;
+    } else {
+        baseFontSize = 8;
+    }
+    
+    // Apply height multiplier to base font size
+    let fontSize = Math.round(baseFontSize * heightMultiplier);
+    
+    // Apply bounds
+    fontSize = Math.max(6, Math.min(36, fontSize));
+    
+    // Test if text fits at this size and reduce if necessary
+    fontSize = fitTextToContainer(label, text, fontSize, labelWidth, labelHeight);
+    
     label.style.fontSize = fontSize + 'px';
+    
+    // Store the current dynamic char limit for use in event handlers
+    label.setAttribute('data-char-limit', dynamicCharLimit);
+}
+
+// Test if text fits in container and reduce font size until it fits
+function fitTextToContainer(label, text, startFontSize, maxWidth, maxHeight) {
+    let fontSize = startFontSize;
+    const minFontSize = 6; // Absolute minimum readable size
+    
+    // Create a temporary element to measure text dimensions
+    const tempElement = document.createElement('div');
+    tempElement.style.position = 'absolute';
+    tempElement.style.visibility = 'hidden';
+    tempElement.style.whiteSpace = 'normal';
+    tempElement.style.wordBreak = 'break-word';
+    tempElement.style.overflowWrap = 'anywhere';
+    tempElement.style.width = maxWidth + 'px';
+    tempElement.style.fontFamily = getComputedStyle(label).fontFamily;
+    tempElement.style.fontWeight = getComputedStyle(label).fontWeight;
+    tempElement.style.textAlign = 'center';
+    tempElement.style.padding = '0';
+    tempElement.style.margin = '0';
+    tempElement.style.lineHeight = '1.2';
+    tempElement.textContent = text;
+    
+    document.body.appendChild(tempElement);
+    
+    try {
+        // Test decreasing font sizes until text fits
+        while (fontSize >= minFontSize) {
+            tempElement.style.fontSize = fontSize + 'px';
+            
+            // Force layout update
+            tempElement.offsetHeight;
+            
+            const textHeight = tempElement.offsetHeight;
+            const textWidth = tempElement.offsetWidth;
+            
+            // Check if text fits within bounds (with some padding tolerance)
+            if (textHeight <= (maxHeight - 10) && textWidth <= maxWidth) {
+                break;
+            }
+            
+            fontSize -= 0.5; // Reduce by half pixel for fine control
+        }
+        
+        // Ensure we don't go below minimum
+        fontSize = Math.max(minFontSize, fontSize);
+        
+    } finally {
+        document.body.removeChild(tempElement);
+    }
+    
+    return fontSize;
 }
 
 // Setup tier label event listeners for auto-resizing
 function setupTierLabelListeners() {
     document.querySelectorAll('.tier-label').forEach(label => {
-        // Auto-resize on input
+        // Auto-resize on input with dynamic character limit and overflow protection
         label.addEventListener('input', function() {
+            // Clean up the text - remove problematic characters
+            let text = this.textContent || this.innerText;
+            
+            // Remove excessive whitespace (more than 2 consecutive spaces)
+            text = text.replace(/\s{3,}/g, '  ');
+            
+            // Remove line breaks and tabs
+            text = text.replace(/[\r\n\t]/g, ' ');
+            
+            // Update the content if it was cleaned
+            if (text !== (this.textContent || this.innerText)) {
+                this.textContent = text;
+                
+                // Restore cursor position to end
+                const range = document.createRange();
+                const selection = window.getSelection();
+                range.selectNodeContents(this);
+                range.collapse(false);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
+            
+            // Apply sizing first to get current char limit
             autoResizeTierLabel(this);
+            
+            // Re-check text after sizing (in case it was truncated)
+            text = this.textContent || this.innerText;
+            const currentCharLimit = parseInt(this.getAttribute('data-char-limit')) || MAX_TIER_LABEL_LENGTH;
+            
+            // Double-check character limit enforcement
+            if (text.length > currentCharLimit) {
+                const truncatedText = text.substring(0, currentCharLimit);
+                this.textContent = truncatedText;
+                
+                // Move cursor to end
+                const range = document.createRange();
+                const selection = window.getSelection();
+                range.selectNodeContents(this);
+                range.collapse(false);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                
+                showMessage(`Tier label limited to ${currentCharLimit} characters for current size`, 'warning');
+                
+                // Re-apply sizing after truncation
+                autoResizeTierLabel(this);
+            }
+            
             updateTemplateState();
         });
         
-        // Auto-resize on paste
-        label.addEventListener('paste', function() {
+        // Auto-resize on paste with dynamic character limit
+        label.addEventListener('paste', function(e) {
+            e.preventDefault(); // Prevent default paste
+            
+            // Get current dynamic character limit
+            const currentCharLimit = parseInt(this.getAttribute('data-char-limit')) || MAX_TIER_LABEL_LENGTH;
+            
+            // Get pasted text
+            const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+            const currentText = this.textContent || this.innerText;
+            
+            // Calculate how much text we can add
+            const remainingChars = currentCharLimit - currentText.length;
+            
+            if (remainingChars <= 0) {
+                showMessage(`Tier label limited to ${currentCharLimit} characters for current size`, 'warning');
+                return;
+            }
+            
+            // Truncate pasted text if necessary
+            const textToInsert = pastedText.substring(0, remainingChars);
+            
+            // Insert the text at cursor position
+            const selection = window.getSelection();
+            if (selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                range.deleteContents();
+                range.insertNode(document.createTextNode(textToInsert));
+                range.collapse(false);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            } else {
+                // Fallback: append to end
+                this.textContent = currentText + textToInsert;
+            }
+            
+            if (pastedText.length > textToInsert.length) {
+                showMessage(`Pasted text truncated to ${currentCharLimit} character limit for current size`, 'warning');
+            }
+            
             setTimeout(() => {
                 autoResizeTierLabel(this);
                 updateTemplateState();
             }, 10);
         });
         
+        // Prevent line breaks and enforce dynamic character limit on keydown with enhanced validation
+        label.addEventListener('keydown', function(e) {
+            const text = this.textContent || this.innerText;
+            
+            // Prevent problematic keys
+            if (e.key === 'Enter' || e.key === 'Tab') {
+                e.preventDefault();
+                return;
+            }
+            
+            // Allow navigation and editing keys
+            const allowedKeys = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'];
+            if (allowedKeys.includes(e.key) || e.ctrlKey || e.metaKey) {
+                return;
+            }
+            
+            // Prevent multiple consecutive spaces
+            if (e.key === ' ') {
+                const selection = window.getSelection();
+                if (selection.rangeCount > 0) {
+                    const range = selection.getRangeAt(0);
+                    const beforeCursor = range.startContainer.textContent?.substring(0, range.startOffset) || '';
+                    const afterCursor = range.startContainer.textContent?.substring(range.startOffset) || '';
+                    
+                    // Check if there are already spaces around the cursor
+                    if (beforeCursor.endsWith('  ') || afterCursor.startsWith('  ') || 
+                        (beforeCursor.endsWith(' ') && afterCursor.startsWith(' '))) {
+                        e.preventDefault();
+                        return;
+                    }
+                }
+            }
+            
+            // Get current character limit and test if we can add more
+            autoResizeTierLabel(this);
+            const currentCharLimit = parseInt(this.getAttribute('data-char-limit')) || MAX_TIER_LABEL_LENGTH;
+            
+            // Prevent adding more characters if at current limit
+            if (text.length >= currentCharLimit) {
+                e.preventDefault();
+                showMessage(`Tier label limited to ${currentCharLimit} characters for current size`, 'warning');
+                return;
+            }
+            
+            // For very long strings without spaces, start refusing new characters earlier
+            const words = text.split(/\s+/);
+            const longestWord = Math.max(...words.map(word => word.length));
+            if (longestWord > 15 && !e.key.match(/\s/)) {
+                // If we're typing a non-space character and there's already a very long word
+                const selection = window.getSelection();
+                if (selection.rangeCount > 0) {
+                    const range = selection.getRangeAt(0);
+                    const currentWord = getCurrentWord(range);
+                    if (currentWord.length > 15) {
+                        e.preventDefault();
+                        showMessage('Word too long - add a space or hyphen to continue', 'warning');
+                        return;
+                    }
+                }
+            }
+        });
+        
         // Initial resize
         autoResizeTierLabel(label);
     });
+}
+
+// Helper function to get the current word being typed at cursor position
+function getCurrentWord(range) {
+    const textNode = range.startContainer;
+    if (textNode.nodeType !== Node.TEXT_NODE) return '';
+    
+    const text = textNode.textContent || '';
+    const offset = range.startOffset;
+    
+    // Find word boundaries around the cursor
+    let start = offset;
+    let end = offset;
+    
+    // Move start backward to find word start
+    while (start > 0 && !text[start - 1].match(/\s/)) {
+        start--;
+    }
+    
+    // Move end forward to find word end
+    while (end < text.length && !text[end].match(/\s/)) {
+        end++;
+    }
+    
+    return text.substring(start, end);
 }
 
 // Remove draggable functionality from tier rows
@@ -118,8 +386,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     }, 500);
 });
 
-// Add window resize listener for responsive tier label sizing
-window.addEventListener('resize', debouncedUpdateTierLabelSizes);
+// Remove window resize listener since tier labels no longer scale with row height
+// Text now only scales based on content length
+// window.addEventListener('resize', debouncedUpdateTierLabelSizes);
 
 function forceRemoveEyedropperFromExisting() {
     console.log('🎯 Force removing eyedropper from existing color pickers...');
@@ -229,6 +498,16 @@ function initializeEventListeners() {
     if (shareCheckbox) {
         shareCheckbox.addEventListener('change', handlePublicSharingChange);
     }
+    
+    // Image size controls
+    const imageSizeRadios = document.querySelectorAll('input[name="imageSize"]');
+    imageSizeRadios.forEach(radio => {
+        radio.addEventListener('change', function() {
+            if (this.checked) {
+                changeImageSize(this.value);
+            }
+        });
+    });
     
     // Color pickers for tier rows
     setupColorPickers();
@@ -491,11 +770,21 @@ function compressImage(file, callback) {
         canvas.width = width;
         canvas.height = height;
         
+        // Clear the canvas to ensure transparency is preserved
+        ctx.clearRect(0, 0, width, height);
+        
         // Draw and compress
         ctx.drawImage(img, 0, 0, width, height);
         
-        // Convert to compressed data URL (JPEG with 0.7 quality)
-        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        // Check if the original file is PNG to preserve transparency
+        let compressedDataUrl;
+        if (file.type === 'image/png') {
+            // Keep as PNG to preserve transparency
+            compressedDataUrl = canvas.toDataURL('image/png');
+        } else {
+            // Convert to compressed JPEG for other formats
+            compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        }
         
         console.log('Image compressed from', file.size, 'bytes to approximately', 
                    Math.round(compressedDataUrl.length * 0.75), 'bytes');
@@ -542,6 +831,9 @@ function createImageElement(src, name) {
     });
     
     imagePool.appendChild(imgElement);
+    
+    // Apply current size class to the new image
+    applySizeClasses([imgElement], []);
     
     // Store image data
     currentTemplate.images.push({
@@ -608,6 +900,9 @@ function drop(e) {
             
             e.currentTarget.appendChild(newItem);
             
+            // Apply current size class to the new item
+            applySizeClasses([newItem], []);
+            
             // Remove the original image from the main pool
             const poolContainer = document.querySelector('.image-pool-container');
             const originalImages = poolContainer.querySelectorAll('.tier-item img');
@@ -654,6 +949,11 @@ function addTierRow() {
     `;
     
     container.appendChild(newTier);
+    
+    // Apply current size class to the new tier label, row, and tier-items container
+    const newTierLabel = newTier.querySelector('.tier-label');
+    const newTierItemsContainer = newTier.querySelector('.tier-items');
+    applySizeClasses([], [newTierLabel], [newTier], [newTierItemsContainer]);
     
     console.log('New tier row added, re-setting up event listeners');
     
@@ -1142,32 +1442,20 @@ function updateTemplateState() {
         });
     });
     
-    // Update tier label sizes based on row height
-    updateTierLabelSizes();
+    // Apply auto-resize to all existing tier labels with a delay to ensure DOM has updated
+    setTimeout(() => {
+        document.querySelectorAll('.tier-label').forEach(autoResizeTierLabel);
+    }, 50); // Small delay to ensure tier row heights have updated after image movement
 }
 
-// Dynamic tier label sizing function
+// Update all tier label text sizes based on their content and available space
 function updateTierLabelSizes() {
-    document.querySelectorAll('.tier-row').forEach(row => {
-        const tierLabel = row.querySelector('.tier-label');
-        const tierItems = row.querySelector('.tier-items');
-        
-        if (tierLabel && tierItems) {
-            // Get the actual height of the tier items container
-            const containerHeight = tierItems.offsetHeight;
-            
-            // Base font size calculation based on container height
-            // 80px height = 24px font size (base)
-            // Scale proportionally with a minimum and maximum
-            const baseFontSize = 24;
-            const baseHeight = 80;
-            const scaleFactor = Math.max(0.7, Math.min(2, containerHeight / baseHeight));
-            const newFontSize = Math.round(baseFontSize * scaleFactor);
-            
-            // Apply the calculated font size
-            tierLabel.style.fontSize = `${Math.max(16, Math.min(48, newFontSize))}px`;
-        }
-    });
+    // Add a small delay to ensure DOM heights are updated
+    setTimeout(() => {
+        document.querySelectorAll('.tier-label').forEach(label => {
+            autoResizeTierLabel(label);
+        });
+    }, 50);
 }
 
 // Debounced version for performance
@@ -1175,6 +1463,100 @@ let tierLabelSizeUpdateTimeout;
 function debouncedUpdateTierLabelSizes() {
     clearTimeout(tierLabelSizeUpdateTimeout);
     tierLabelSizeUpdateTimeout = setTimeout(updateTierLabelSizes, 100);
+}
+
+// Function to change image size and update tier labels accordingly
+function changeImageSize(size) {
+    // Remove existing size classes from all tier items, labels, rows, and tier-items containers
+    const tierItems = document.querySelectorAll('.tier-item');
+    const tierLabels = document.querySelectorAll('.tier-label');
+    const tierRows = document.querySelectorAll('.tier-row');
+    const tierItemsContainers = document.querySelectorAll('.tier-items');
+    
+    // Remove all size classes
+    tierItems.forEach(item => {
+        item.classList.remove('size-small', 'size-medium', 'size-large');
+    });
+    
+    tierLabels.forEach(label => {
+        label.classList.remove('size-small', 'size-medium', 'size-large');
+    });
+    
+    tierRows.forEach(row => {
+        row.classList.remove('size-small', 'size-medium', 'size-large');
+    });
+    
+    tierItemsContainers.forEach(container => {
+        container.classList.remove('size-small', 'size-medium', 'size-large');
+    });
+    
+    // Add the new size class to all elements
+    const sizeClass = `size-${size}`;
+    tierItems.forEach(item => {
+        item.classList.add(sizeClass);
+    });
+    
+    tierLabels.forEach(label => {
+        label.classList.add(sizeClass);
+    });
+    
+    tierRows.forEach(row => {
+        row.classList.add(sizeClass);
+    });
+    
+    tierItemsContainers.forEach(container => {
+        container.classList.add(sizeClass);
+    });
+    
+    // Update tier label sizes after size change
+    setTimeout(() => {
+        updateTierLabelSizes();
+    }, 100);
+}
+
+// Helper function to apply current size classes to specific elements
+function applySizeClasses(tierItems, tierLabels, tierRows = [], tierItemsContainers = []) {
+    // Get the currently selected size from radio buttons
+    const selectedRadio = document.querySelector('input[name="imageSize"]:checked');
+    const currentSize = selectedRadio ? selectedRadio.value : 'medium';
+    
+    // Apply size class
+    const sizeClass = `size-${currentSize}`;
+    tierItems.forEach(item => {
+        item.classList.add(sizeClass);
+    });
+    
+    tierLabels.forEach(label => {
+        label.classList.add(sizeClass);
+    });
+    
+    tierRows.forEach(row => {
+        row.classList.add(sizeClass);
+    });
+    
+    tierItemsContainers.forEach(container => {
+        container.classList.add(sizeClass);
+    });
+}
+
+// Helper function to get current image size setting
+function getCurrentImageSize() {
+    const sizeRadios = document.querySelectorAll('input[name="imageSize"]');
+    for (let radio of sizeRadios) {
+        if (radio.checked) {
+            return radio.value;
+        }
+    }
+    return 'medium'; // default
+}
+
+// Helper function to apply current size classes to elements
+function applySizeClasses(tierItems, tierLabels) {
+    const currentSize = getCurrentImageSize();
+    if (currentSize !== 'medium') {
+        tierItems.forEach(item => item.classList.add(currentSize));
+        tierLabels.forEach(label => label.classList.add(currentSize));
+    }
 }
 
 function resetTierList() {
@@ -1490,6 +1872,13 @@ function recreateTierStructure(tiers) {
         });
     });
     
+    // Apply current size classes to all recreated elements
+    const allTierItems = container.querySelectorAll('.tier-item');
+    const allTierLabels = container.querySelectorAll('.tier-label');
+    const allTierRows = container.querySelectorAll('.tier-row');
+    const allTierItemsContainers = container.querySelectorAll('.tier-items');
+    applySizeClasses(allTierItems, allTierLabels, allTierRows, allTierItemsContainers);
+    
     // Setup color picker event listeners
     setupColorPickers();
     
@@ -1546,6 +1935,10 @@ function loadTemplateImages(images) {
             imagePool.appendChild(imgElement);
         }
     });
+    
+    // Apply current size classes to all loaded pool images
+    const poolTierItems = imagePool.querySelectorAll('.tier-item');
+    applySizeClasses(poolTierItems, []);
 }
 
 // Add event listeners for drag over effects

@@ -100,6 +100,23 @@
                     <button class="control-btn" onclick="removeTierRow()">➖ Remove Tier</button>
                     <button class="control-btn" onclick="resetTierList()">🔄 Reset</button>
                 </div>
+                <div class="image-size-controls">
+                    <span class="control-label">Image Size:</span>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="imageSize" value="small" onchange="changeImageSize(this.value)">
+                            <span class="radio-text">Small</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="imageSize" value="medium" checked onchange="changeImageSize(this.value)">
+                            <span class="radio-text">Medium</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="imageSize" value="large" onchange="changeImageSize(this.value)">
+                            <span class="radio-text">Large</span>
+                        </label>
+                    </div>
+                </div>
             </div>
 
             <!-- Tier List Container -->
@@ -154,8 +171,8 @@
                     <div class="pool-header">
                         <h3>Image Pool</h3>
                         <div class="pool-controls">
-                            <button class="control-btn" onclick="clearAllImages()">🗑️ Clear All</button>
-                            <button class="control-btn" onclick="randomizeImages()">🎲 Randomize</button>
+                            <button class="control-btn" onclick="clearAllImages()">🗑️ Delete All Images</button>
+                            <button class="control-btn" onclick="randomizeImages()">🎲 Randomize Pool</button>
                             <button class="control-btn" id="pin-pool-btn" onclick="togglePinnedPool()" title="Pin character pool to bottom of screen">📌 Pin Pool</button>
                             <button class="control-btn secondary" onclick="resetImageDeleteConfirmation()" title="Reset image deletion confirmation settings">🔔 Reset Confirmations</button>
                         </div>

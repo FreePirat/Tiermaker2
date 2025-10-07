@@ -12,7 +12,7 @@
     border: 1px solid #666;
     border-radius: 4px;
     width: 20px;
-    height: 40px;
+    min-height: 40px; /* Use min-height instead of fixed height */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -23,6 +23,7 @@
     margin-left: 8px;
     user-select: none;
     flex-shrink: 0;
+    align-self: stretch; /* Allow it to stretch with the tier row */
 }
 
 .tier-drag-handle:hover {
@@ -49,7 +50,7 @@
 /* Update tier row to use flexbox for proper alignment */
 .tier-row {
     display: flex;
-    align-items: center;
+    align-items: stretch; /* Allow tier items to expand to full height */
     margin-bottom: 15px;
     transition: all 0.2s ease;
 }
@@ -266,11 +267,11 @@
 
 .tier-row {
     display: flex;
-    min-height: 80px;
+    min-height: 96px;
     margin-bottom: 8px;
     background-color: #1a1a1a;
     border-radius: 6px;
-    overflow: hidden;
+    overflow: visible; /* Changed from hidden to visible */
     position: relative;
     transition: all 0.2s ease;
     border: 2px solid transparent;
@@ -307,17 +308,66 @@
         2px 0 0 #000,
         0 -2px 0 #000,
         0 2px 0 #000;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    word-break: break-all;
-    hyphens: auto;
+    /* Robust text containment - prevent layout breaking */
+    overflow-wrap: anywhere; /* Break anywhere if needed to prevent overflow */
+    word-break: break-word; /* Break long words that don't fit */
+    hyphens: auto; /* Add hyphens for broken words */
+    white-space: normal; /* Allow normal text wrapping */
     text-align: center;
     padding: 5px;
     box-sizing: border-box;
-    max-width: 80px;
-    overflow: hidden;
-    /* Make the label grow with the row */
+    width: 96px; /* Fixed width to prevent horizontal expansion */
+    max-width: 96px; /* Enforce maximum width */
+    min-width: 96px; /* Enforce minimum width */
+    overflow: hidden; /* Hide any overflow that might occur */
+    transition: width 0.3s ease, min-width 0.3s ease, max-width 0.3s ease, min-height 0.3s ease;
+    /* Stretch to fill the full height of the tier row */
     align-self: stretch;
+}
+
+/* Tier Label Size Variants */
+.tier-label.size-small {
+    width: 80px;
+    min-width: 80px;
+    max-width: 80px;
+}
+
+.tier-label.size-medium {
+    width: 96px;
+    min-width: 96px;
+    max-width: 96px;
+}
+
+.tier-label.size-large {
+    width: 112px;
+    min-width: 112px;
+    max-width: 112px;
+}
+
+/* Tier Row Size Variants */
+.tier-row.size-small {
+    min-height: 80px; /* 64px image + 16px padding */
+}
+
+.tier-row.size-medium {
+    min-height: 96px; /* 80px image + 16px padding */
+}
+
+.tier-row.size-large {
+    min-height: 112px; /* 96px image + 16px padding */
+}
+
+/* Tier Items Size Variants */
+.tier-items.size-small {
+    min-height: 80px; /* Match tier row height */
+}
+
+.tier-items.size-medium {
+    min-height: 96px; /* Match tier row height */
+}
+
+.tier-items.size-large {
+    min-height: 112px; /* Match tier row height */
 }
 
 .tier-label:focus {
@@ -393,14 +443,17 @@
     flex: 1;
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-start;
     align-content: flex-start;
+    justify-content: flex-start;
     padding: 8px;
-    min-height: 80px;
+    min-height: 96px;
     background-color: #404040;
     transition: background-color 0.2s ease;
-    /* Ensure the container can grow vertically */
-    align-self: stretch;
+    box-sizing: border-box;
+    /* Explicitly allow height to grow based on content */
+    height: fit-content;
+    /* Ensure proper wrapping */
+    overflow: visible;
 }
 
 .tier-items.drag-over {
@@ -409,14 +462,31 @@
 }
 
 .tier-item {
-    width: 64px;
-    height: 64px;
+    width: 80px;
+    height: 80px;
     margin: 2px;
     border-radius: 4px;
     overflow: hidden;
     cursor: grab;
-    transition: transform 0.2s ease;
+    transition: transform 0.2s ease, width 0.3s ease, height 0.3s ease;
     border: 2px solid transparent;
+    background: transparent; /* Ensure no background for transparent images */
+}
+
+/* Image Size Variants */
+.tier-item.size-small {
+    width: 64px;
+    height: 64px;
+}
+
+.tier-item.size-medium {
+    width: 80px;
+    height: 80px;
+}
+
+.tier-item.size-large {
+    width: 96px;
+    height: 96px;
 }
 
 .tier-item:hover {
@@ -432,8 +502,9 @@
 .tier-item img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: cover; /* Back to cover for proper square filling */
     display: block;
+    background: transparent; /* Ensure transparent background */
 }
 
 /* Image Management */
@@ -621,6 +692,9 @@
     
     .tier-label {
         width: 80px;
+        min-width: 80px;
+        max-width: 80px;
+        min-height: 80px; /* Remove fixed height, allow stretching */
         font-size: 20px;
     }
     
@@ -639,6 +713,9 @@
 @media (max-width: 480px) {
     .tier-label {
         width: 60px;
+        min-width: 60px;
+        max-width: 60px;
+        min-height: 60px; /* Remove fixed height, allow stretching */
         font-size: 16px;
     }
     
@@ -834,6 +911,10 @@
     padding: 16px;
     margin-bottom: 20px;
     border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
 }
 
 .tier-management-section .tier-management {
@@ -841,6 +922,47 @@
     border: none;
     padding: 0;
     margin: 0;
+}
+
+/* Image Size Controls */
+.image-size-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.control-label {
+    color: #ddd;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.radio-group {
+    display: flex;
+    gap: 12px;
+}
+
+.radio-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    color: #ccc;
+    font-size: 13px;
+    transition: color 0.2s ease;
+}
+
+.radio-option:hover {
+    color: #fff;
+}
+
+.radio-option input[type="radio"] {
+    margin: 0;
+    accent-color: #ff6b9d;
+}
+
+.radio-text {
+    user-select: none;
 }
 
 @media (max-width: 768px) {
