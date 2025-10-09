@@ -502,7 +502,7 @@
 .tier-item img {
     width: 100%;
     height: 100%;
-    object-fit: cover; /* Back to cover for proper square filling */
+    object-fit: contain; /* Changed from cover to contain to preserve transparency */
     display: block;
     background: transparent; /* Ensure transparent background */
 }
@@ -590,6 +590,14 @@
 .image-pool-container.drag-over {
     border-color: #ff6b9d;
     background-color: #333;
+}
+
+/* Pinned Pool Drag Over Effects */
+.pinned-pool-container.drag-over,
+.pinned-pool-row.drag-over {
+    background-color: rgba(255, 107, 157, 0.1);
+    border: 2px dashed #ff6b9d;
+    border-radius: 6px;
 }
 
 /* Controls */
@@ -1033,9 +1041,22 @@
     display: flex;
     gap: 6px;
     margin-bottom: 6px;
-    min-height: 60px;
+    min-height: 80px;
     flex-wrap: wrap;
     align-content: flex-start;
+}
+
+/* Pinned Pool Row Size Variants */
+.pinned-pool-row.size-small {
+    min-height: 64px;
+}
+
+.pinned-pool-row.size-medium {
+    min-height: 80px;
+}
+
+.pinned-pool-row.size-large {
+    min-height: 96px;
 }
 
 .pinned-pool-row:last-child {
@@ -1043,8 +1064,8 @@
 }
 
 .pinned-character {
-    width: 60px;
-    height: 60px;
+    width: 80px;
+    height: 80px;
     border-radius: 8px;
     cursor: grab;
     transition: all 0.2s ease;
@@ -1052,6 +1073,7 @@
     position: relative;
     flex-shrink: 0;
     overflow: hidden;
+    background: transparent; /* Ensure transparent background */
 }
 
 .pinned-character:hover {
@@ -1068,10 +1090,27 @@
 .pinned-character img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain; /* Changed from cover to contain to preserve transparency */
     border-radius: 6px;
     pointer-events: none;
     display: block;
+    background: transparent; /* Ensure transparent background */
+}
+
+/* Pinned Character Size Variants */
+.pinned-character.size-small {
+    width: 64px;
+    height: 64px;
+}
+
+.pinned-character.size-medium {
+    width: 80px;
+    height: 80px;
+}
+
+.pinned-character.size-large {
+    width: 96px;
+    height: 96px;
 }
 
 /* Pin button styling */

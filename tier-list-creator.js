@@ -815,9 +815,8 @@ function createImageElement(src, name) {
     const timestamp = Date.now();
     imgElement.setAttribute('data-timestamp', timestamp);
     
-    // Add drag event listeners
-    imgElement.addEventListener('dragstart', handleDragStart);
-    imgElement.addEventListener('dragend', handleDragEnd);
+    // Use setupDragEvents for consistency
+    setupDragEvents(imgElement);
     
     // Add remove button functionality
     const removeBtn = imgElement.querySelector('.remove-btn');
@@ -853,19 +852,6 @@ function createImageElement(src, name) {
 }
 
 // Drag and Drop Functions
-function handleDragStart(e) {
-    draggedElement = e.target.closest('.tier-item');
-    draggedElement.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-}
-
-function handleDragEnd(e) {
-    if (draggedElement) {
-        draggedElement.classList.remove('dragging');
-        draggedElement = null;
-    }
-}
-
 function allowDrop(e) {
     e.preventDefault();
     e.currentTarget.classList.add('drag-over');
@@ -873,58 +859,212 @@ function allowDrop(e) {
 
 function drop(e) {
     e.preventDefault();
-    e.currentTarget.classList.remove('drag-over');
     
-    if (draggedElement && (e.currentTarget.classList.contains('tier-items') || e.currentTarget.classList.contains('image-pool-container'))) {
-        // Handle pinned character drops
-        if (draggedElement.classList.contains('pinned-character')) {
-            // Create a new tier item from the pinned character
-            const newItem = document.createElement('div');
-            newItem.className = 'tier-item';
-            newItem.draggable = true;
+    // Get the actual drop target - could be currentTarget or target
+    const dropTarget = e.currentTarget || e.target;
+    
+    // Early safety check - ensure we have a valid drop target
+    if (!dropTarget) {
+        console.error('Drop function called without valid target');
+        return;
+    }
+    
+    // Safely remove drag-over class if it exists
+    if (dropTarget && dropTarget.classList && dropTarget.classList.contains('drag-over')) {
+        dropTarget.classList.remove('drag-over');
+    }
+    
+    console.log('Drop event triggered:', {
+        currentTarget: e.currentTarget,
+        target: e.target,
+        dropTarget: dropTarget,
+        classList: dropTarget ? dropTarget.classList.toString() : 'No classList',
+        draggedElement: draggedElement
+    });
+    
+    if (!draggedElement) {
+        console.log('No dragged element');
+        return;
+    }
+    
+    // Early return if dropTarget is not valid
+    if (!dropTarget || !dropTarget.classList) {
+        console.log('Invalid drop target - no classList');
+        return;
+    }
+    
+    const isDropTarget = dropTarget.classList.contains('tier-items') || 
+                        dropTarget.classList.contains('image-pool-container') ||
+                        dropTarget.classList.contains('pinned-pool-container') ||
+                        dropTarget.classList.contains('pinned-pool-row');
+    
+    if (!isDropTarget) {
+        console.log('Not a valid drop target');
+        return;
+    }
+    
+    console.log('Valid drop detected');
+    
+    // Handle drops to image pool (return images from tier rows)
+    if (dropTarget.classList.contains('image-pool-container')) {
+        console.log('Dropping to image pool');
+        if (draggedElement.classList.contains('tier-item')) {
+            console.log('Moving tier item to image pool');
             
-            const img = document.createElement('img');
-            img.src = draggedElement.dataset.src;
-            img.alt = 'Character';
+            // Move tier item back to main image pool
+            dropTarget.appendChild(draggedElement);
             
-            const removeBtn = document.createElement('button');
-            removeBtn.className = 'remove-btn';
-            removeBtn.innerHTML = '×';
-            removeBtn.onclick = removeImage;
+            // Ensure the tier item has the correct size class
+            const selectedRadio = document.querySelector('input[name="imageSize"]:checked');
+            const currentSize = selectedRadio ? selectedRadio.value : 'medium';
+            const sizeClass = `size-${currentSize}`;
             
-            newItem.appendChild(img);
-            newItem.appendChild(removeBtn);
+            // Remove all size classes and add the current one
+            draggedElement.classList.remove('size-small', 'size-medium', 'size-large');
+            draggedElement.classList.add(sizeClass);
             
-            // Setup drag events for the new item
-            setupDragEvents(newItem);
+            updateTemplateState();
+            updatePinnedPool(); // Refresh pinned pool
+            console.log('Successfully moved to image pool');
+            return;
+        }
+    }
+    
+    // Handle drops to pinned pool (return to main pool)
+    if (dropTarget.classList.contains('pinned-pool-container') || 
+        dropTarget.classList.contains('pinned-pool-row')) {
+        
+        if (draggedElement.classList.contains('tier-item')) {
+            // Move tier item back to main image pool
+            const imagePool = document.querySelector('.image-pool-container');
+            imagePool.appendChild(draggedElement);
             
-            e.currentTarget.appendChild(newItem);
+            // Ensure the tier item has the correct size class
+            const selectedRadio = document.querySelector('input[name="imageSize"]:checked');
+            const currentSize = selectedRadio ? selectedRadio.value : 'medium';
+            const sizeClass = `size-${currentSize}`;
             
-            // Apply current size class to the new item
-            applySizeClasses([newItem], []);
+            // Remove all size classes and add the current one
+            draggedElement.classList.remove('size-small', 'size-medium', 'size-large');
+            draggedElement.classList.add(sizeClass);
             
-            // Remove the original image from the main pool
-            const poolContainer = document.querySelector('.image-pool-container');
-            const originalImages = poolContainer.querySelectorAll('.tier-item img');
-            
-            for (let originalImg of originalImages) {
-                if (originalImg.src === draggedElement.dataset.src) {
-                    // Remove the parent tier-item
-                    const tierItem = originalImg.closest('.tier-item');
-                    if (tierItem) {
-                        tierItem.remove();
-                        break; // Only remove the first match
-                    }
+            updateTemplateState();
+            updatePinnedPool(); // Refresh pinned pool
+            return;
+        }
+    }
+    
+    // Handle pinned character drops
+    if (draggedElement.classList.contains('pinned-character')) {
+        // Create a new tier item from the pinned character
+        const newItem = document.createElement('div');
+        newItem.className = 'tier-item';
+        newItem.draggable = true;
+        
+        const img = document.createElement('img');
+        img.src = draggedElement.dataset.src;
+        img.alt = 'Character';
+        
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove-btn';
+        removeBtn.innerHTML = '×';
+        removeBtn.onclick = removeImage;
+        
+        newItem.appendChild(img);
+        newItem.appendChild(removeBtn);
+        
+        // Setup drag events for the new item
+        setupDragEvents(newItem);
+        
+        // Apply current size class to the new item
+        const selectedRadio = document.querySelector('input[name="imageSize"]:checked');
+        const currentSize = selectedRadio ? selectedRadio.value : 'medium';
+        const sizeClass = `size-${currentSize}`;
+        newItem.classList.add(sizeClass);
+        
+        // Handle positioning within tier rows
+        if (dropTarget.classList.contains('tier-items')) {
+            insertAtPosition(dropTarget, newItem, e.clientX, e.clientY);
+        } else {
+            dropTarget.appendChild(newItem);
+        }
+        
+        // Remove the original image from the main pool
+        const poolContainer = document.querySelector('.image-pool-container');
+        const originalImages = poolContainer.querySelectorAll('.tier-item img');
+        
+        for (let originalImg of originalImages) {
+            if (originalImg.src === draggedElement.dataset.src) {
+                // Remove the parent tier-item
+                const tierItem = originalImg.closest('.tier-item');
+                if (tierItem) {
+                    tierItem.remove();
+                    break; // Only remove the first match
                 }
             }
-            
-            // Update the pinned pool to reflect the change
-            updatePinnedPool();
-        } else {
-            // Handle regular drops
-            e.currentTarget.appendChild(draggedElement);
         }
-        updateTemplateState();
+        
+        // Update the pinned pool to reflect the change
+        updatePinnedPool();
+    } else {
+        // Handle regular drops (existing tier items)
+        if (dropTarget.classList.contains('tier-items')) {
+            // Handle positioning within tier rows
+            insertAtPosition(dropTarget, draggedElement, e.clientX, e.clientY);
+        } else {
+            // Simple append for image pool
+            dropTarget.appendChild(draggedElement);
+            
+            // Ensure proper size class when moving to pools
+            const selectedRadio = document.querySelector('input[name="imageSize"]:checked');
+            const currentSize = selectedRadio ? selectedRadio.value : 'medium';
+            const sizeClass = `size-${currentSize}`;
+            
+            // Remove all size classes and add the current one
+            draggedElement.classList.remove('size-small', 'size-medium', 'size-large');
+            draggedElement.classList.add(sizeClass);
+        }
+    }
+    updateTemplateState();
+}
+
+// Function to insert element at the correct position based on mouse coordinates
+function insertAtPosition(container, element, clientX, clientY) {
+    const items = Array.from(container.children).filter(child => 
+        child !== element && child.classList.contains('tier-item')
+    );
+    
+    if (items.length === 0) {
+        container.appendChild(element);
+        return;
+    }
+    
+    // Find the best position to insert the element
+    let insertBefore = null;
+    let minDistance = Infinity;
+    
+    for (let item of items) {
+        const rect = item.getBoundingClientRect();
+        const itemCenterX = rect.left + rect.width / 2;
+        const itemCenterY = rect.top + rect.height / 2;
+        
+        // Calculate distance from mouse to item center
+        const distance = Math.sqrt(
+            Math.pow(clientX - itemCenterX, 2) + 
+            Math.pow(clientY - itemCenterY, 2)
+        );
+        
+        // If mouse is to the left of the item center, consider inserting before this item
+        if (clientX < itemCenterX && distance < minDistance) {
+            minDistance = distance;
+            insertBefore = item;
+        }
+    }
+    
+    if (insertBefore) {
+        container.insertBefore(element, insertBefore);
+    } else {
+        container.appendChild(element);
     }
 }
 
@@ -1467,11 +1607,13 @@ function debouncedUpdateTierLabelSizes() {
 
 // Function to change image size and update tier labels accordingly
 function changeImageSize(size) {
-    // Remove existing size classes from all tier items, labels, rows, and tier-items containers
+    // Remove existing size classes from all elements
     const tierItems = document.querySelectorAll('.tier-item');
     const tierLabels = document.querySelectorAll('.tier-label');
     const tierRows = document.querySelectorAll('.tier-row');
     const tierItemsContainers = document.querySelectorAll('.tier-items');
+    const pinnedCharacters = document.querySelectorAll('.pinned-character');
+    const pinnedPoolRows = document.querySelectorAll('.pinned-pool-row');
     
     // Remove all size classes
     tierItems.forEach(item => {
@@ -1488,6 +1630,14 @@ function changeImageSize(size) {
     
     tierItemsContainers.forEach(container => {
         container.classList.remove('size-small', 'size-medium', 'size-large');
+    });
+    
+    pinnedCharacters.forEach(character => {
+        character.classList.remove('size-small', 'size-medium', 'size-large');
+    });
+    
+    pinnedPoolRows.forEach(row => {
+        row.classList.remove('size-small', 'size-medium', 'size-large');
     });
     
     // Add the new size class to all elements
@@ -1508,6 +1658,14 @@ function changeImageSize(size) {
         container.classList.add(sizeClass);
     });
     
+    pinnedCharacters.forEach(character => {
+        character.classList.add(sizeClass);
+    });
+    
+    pinnedPoolRows.forEach(row => {
+        row.classList.add(sizeClass);
+    });
+    
     // Update tier label sizes after size change
     setTimeout(() => {
         updateTierLabelSizes();
@@ -1515,7 +1673,7 @@ function changeImageSize(size) {
 }
 
 // Helper function to apply current size classes to specific elements
-function applySizeClasses(tierItems, tierLabels, tierRows = [], tierItemsContainers = []) {
+function applySizeClasses(tierItems, tierLabels, tierRows = [], tierItemsContainers = [], pinnedCharacters = []) {
     // Get the currently selected size from radio buttons
     const selectedRadio = document.querySelector('input[name="imageSize"]:checked');
     const currentSize = selectedRadio ? selectedRadio.value : 'medium';
@@ -1523,19 +1681,29 @@ function applySizeClasses(tierItems, tierLabels, tierRows = [], tierItemsContain
     // Apply size class
     const sizeClass = `size-${currentSize}`;
     tierItems.forEach(item => {
+        // Remove existing size classes first
+        item.classList.remove('size-small', 'size-medium', 'size-large');
         item.classList.add(sizeClass);
     });
     
     tierLabels.forEach(label => {
+        label.classList.remove('size-small', 'size-medium', 'size-large');
         label.classList.add(sizeClass);
     });
     
     tierRows.forEach(row => {
+        row.classList.remove('size-small', 'size-medium', 'size-large');
         row.classList.add(sizeClass);
     });
     
     tierItemsContainers.forEach(container => {
+        container.classList.remove('size-small', 'size-medium', 'size-large');
         container.classList.add(sizeClass);
+    });
+    
+    pinnedCharacters.forEach(character => {
+        character.classList.remove('size-small', 'size-medium', 'size-large');
+        character.classList.add(sizeClass);
     });
 }
 
@@ -1548,15 +1716,6 @@ function getCurrentImageSize() {
         }
     }
     return 'medium'; // default
-}
-
-// Helper function to apply current size classes to elements
-function applySizeClasses(tierItems, tierLabels) {
-    const currentSize = getCurrentImageSize();
-    if (currentSize !== 'medium') {
-        tierItems.forEach(item => item.classList.add(currentSize));
-        tierLabels.forEach(label => label.classList.add(currentSize));
-    }
 }
 
 function resetTierList() {
@@ -1854,8 +2013,8 @@ function recreateTierStructure(tiers) {
             const timestamp = item.timestamp || Date.now();
             imgElement.setAttribute('data-timestamp', timestamp);
             
-            imgElement.addEventListener('dragstart', handleDragStart);
-            imgElement.addEventListener('dragend', handleDragEnd);
+            // Use setupDragEvents for consistency
+            setupDragEvents(imgElement);
             
             // Add remove button functionality
             const removeBtn = imgElement.querySelector('.remove-btn');
@@ -1918,8 +2077,8 @@ function loadTemplateImages(images) {
             const timestamp = img.timestamp || Date.now();
             imgElement.setAttribute('data-timestamp', timestamp);
             
-            imgElement.addEventListener('dragstart', handleDragStart);
-            imgElement.addEventListener('dragend', handleDragEnd);
+            // Use setupDragEvents for consistency
+            setupDragEvents(imgElement);
             
             // Add remove button functionality
             const removeBtn = imgElement.querySelector('.remove-btn');
@@ -1943,21 +2102,47 @@ function loadTemplateImages(images) {
 
 // Add event listeners for drag over effects
 document.addEventListener('dragover', function(e) {
-    if (e.target.classList.contains('tier-items') || e.target.classList.contains('image-pool-container')) {
+    const isDropTarget = e.target.classList.contains('tier-items') || 
+                        e.target.classList.contains('image-pool-container') ||
+                        e.target.classList.contains('pinned-pool-container') ||
+                        e.target.classList.contains('pinned-pool-row');
+    
+    if (isDropTarget) {
         e.preventDefault();
         e.target.classList.add('drag-over');
     }
 });
 
 document.addEventListener('dragleave', function(e) {
-    if (e.target.classList.contains('tier-items') || e.target.classList.contains('image-pool-container')) {
+    const isDropTarget = e.target.classList.contains('tier-items') || 
+                        e.target.classList.contains('image-pool-container') ||
+                        e.target.classList.contains('pinned-pool-container') ||
+                        e.target.classList.contains('pinned-pool-row');
+    
+    if (isDropTarget) {
         e.target.classList.remove('drag-over');
     }
 });
 
 document.addEventListener('drop', function(e) {
-    if (e.target.classList.contains('tier-items') || e.target.classList.contains('image-pool-container')) {
-        e.target.classList.remove('drag-over');
+    const isDropTarget = e.target.classList.contains('tier-items') || 
+                        e.target.classList.contains('image-pool-container') ||
+                        e.target.classList.contains('pinned-pool-container') ||
+                        e.target.classList.contains('pinned-pool-row');
+    
+    if (isDropTarget) {
+        // Create a modified event object where currentTarget is the actual drop target
+        const modifiedEvent = {
+            ...e,
+            currentTarget: e.target,
+            target: e.target,
+            preventDefault: () => e.preventDefault(),
+            clientX: e.clientX,
+            clientY: e.clientY
+        };
+        
+        // Call the main drop function with modified event
+        drop(modifiedEvent);
     }
 });
 
@@ -2017,6 +2202,23 @@ function populatePinnedPool() {
             targetRow.appendChild(pinnedImg);
         }
     });
+    
+    // Apply current size classes to pinned pool rows and characters
+    const selectedRadio = document.querySelector('input[name="imageSize"]:checked');
+    const currentSize = selectedRadio ? selectedRadio.value : 'medium';
+    const sizeClass = `size-${currentSize}`;
+    
+    pinnedRows.forEach(row => {
+        row.classList.remove('size-small', 'size-medium', 'size-large');
+        row.classList.add(sizeClass);
+    });
+    
+    // Apply size classes to all pinned characters
+    const allPinnedCharacters = document.querySelectorAll('.pinned-character');
+    allPinnedCharacters.forEach(character => {
+        character.classList.remove('size-small', 'size-medium', 'size-large');
+        character.classList.add(sizeClass);
+    });
 }
 
 function createPinnedCharacter(originalImg) {
@@ -2032,6 +2234,12 @@ function createPinnedCharacter(originalImg) {
     
     // Store the source for drag operations
     pinnedChar.dataset.src = originalImg.src;
+    
+    // Apply current size class to the pinned character
+    const selectedRadio = document.querySelector('input[name="imageSize"]:checked');
+    const currentSize = selectedRadio ? selectedRadio.value : 'medium';
+    const sizeClass = `size-${currentSize}`;
+    pinnedChar.classList.add(sizeClass);
     
     // Add drag events
     pinnedChar.addEventListener('dragstart', function(e) {
@@ -2050,29 +2258,19 @@ function createPinnedCharacter(originalImg) {
 }
 
 // Setup drag events for tier items
-function setupDragEvents(tierItem) {
-    tierItem.addEventListener('dragstart', function(e) {
-        draggedElement = tierItem;
-        e.dataTransfer.effectAllowed = 'move';
-        tierItem.style.opacity = '0.5';
-    });
-    
-    tierItem.addEventListener('dragend', function(e) {
-        tierItem.style.opacity = '1';
-        draggedElement = null;
-    });
-}
-
-// Setup drag events for tier items
 function setupDragEvents(element) {
     element.addEventListener('dragstart', function(e) {
         draggedElement = element;
+        console.log('Setup drag events - Drag started:', draggedElement);
         e.dataTransfer.effectAllowed = 'move';
         element.style.opacity = '0.5';
+        element.classList.add('dragging');
     });
     
     element.addEventListener('dragend', function(e) {
+        console.log('Setup drag events - Drag ended:', draggedElement);
         element.style.opacity = '1';
+        element.classList.remove('dragging');
         draggedElement = null;
     });
 }
