@@ -5,6 +5,13 @@ const MAX_TIER_LABEL_LENGTH = 35; // Character limit for tier labels
 
 let draggedElement = null;
 let templates = [];
+
+// Touch drag variables
+let touchStartPos = { x: 0, y: 0 };
+let touchOffset = { x: 0, y: 0 };
+let isDragging = false;
+let dragPreview = null;
+
 let currentTemplate = {
     id: null,
     name: '',
@@ -2254,6 +2261,9 @@ function createPinnedCharacter(originalImg) {
         draggedElement = null;
     });
     
+    // Add touch support for mobile devices
+    setupTouchEvents(pinnedChar);
+    
     return pinnedChar;
 }
 
@@ -2272,6 +2282,158 @@ function setupDragEvents(element) {
         element.style.opacity = '1';
         element.classList.remove('dragging');
         draggedElement = null;
+    });
+    
+    // Add touch support for mobile devices
+    setupTouchEvents(element);
+}
+
+// Touch events for mobile drag-and-drop
+function setupTouchEvents(element) {
+    element.addEventListener('touchstart', function(e) {
+        if (e.touches.length > 1) return; // Only handle single touch
+        
+        const touch = e.touches[0];
+        touchStartPos = { x: touch.clientX, y: touch.clientY };
+        
+        // Calculate offset from element center
+        const rect = element.getBoundingClientRect();
+        touchOffset = {
+            x: touch.clientX - rect.left - rect.width / 2,
+            y: touch.clientY - rect.top - rect.height / 2
+        };
+        
+        e.preventDefault(); // Prevent scrolling
+    }, { passive: false });
+    
+    element.addEventListener('touchmove', function(e) {
+        if (e.touches.length > 1) return;
+        
+        const touch = e.touches[0];
+        const deltaX = Math.abs(touch.clientX - touchStartPos.x);
+        const deltaY = Math.abs(touch.clientY - touchStartPos.y);
+        
+        // Start dragging if moved more than 10px
+        if (!isDragging && (deltaX > 10 || deltaY > 10)) {
+            isDragging = true;
+            draggedElement = element;
+            
+            // Create drag preview
+            createTouchDragPreview(element, touch);
+            
+            // Style original element
+            element.style.opacity = '0.5';
+            element.classList.add('dragging');
+            
+            console.log('Touch drag started:', draggedElement);
+        }
+        
+        if (isDragging && dragPreview) {
+            // Update preview position
+            dragPreview.style.left = (touch.clientX - touchOffset.x) + 'px';
+            dragPreview.style.top = (touch.clientY - touchOffset.y) + 'px';
+            
+            // Add drag-over effect to drop targets
+            updateTouchDropTarget(touch.clientX, touch.clientY);
+        }
+        
+        e.preventDefault();
+    }, { passive: false });
+    
+    element.addEventListener('touchend', function(e) {
+        if (!isDragging) return;
+        
+        const touch = e.changedTouches[0];
+        const dropTarget = findDropTargetAtPosition(touch.clientX, touch.clientY);
+        
+        if (dropTarget && draggedElement) {
+            // Create a mock drop event
+            const mockDropEvent = {
+                currentTarget: dropTarget,
+                target: dropTarget,
+                preventDefault: () => {},
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            };
+            
+            console.log('Touch drop on:', dropTarget);
+            drop(mockDropEvent);
+        }
+        
+        // Cleanup
+        cleanupTouchDrag();
+        e.preventDefault();
+    }, { passive: false });
+    
+    element.addEventListener('touchcancel', function(e) {
+        cleanupTouchDrag();
+        e.preventDefault();
+    });
+}
+
+function createTouchDragPreview(element, touch) {
+    dragPreview = element.cloneNode(true);
+    dragPreview.style.position = 'fixed';
+    dragPreview.style.pointerEvents = 'none';
+    dragPreview.style.zIndex = '9999';
+    dragPreview.style.opacity = '0.8';
+    dragPreview.style.transform = 'scale(1.1)';
+    dragPreview.style.left = (touch.clientX - touchOffset.x) + 'px';
+    dragPreview.style.top = (touch.clientY - touchOffset.y) + 'px';
+    dragPreview.classList.add('touch-drag-preview');
+    
+    document.body.appendChild(dragPreview);
+}
+
+function updateTouchDropTarget(x, y) {
+    // Remove existing drag-over classes
+    document.querySelectorAll('.drag-over').forEach(el => {
+        el.classList.remove('drag-over');
+    });
+    
+    const dropTarget = findDropTargetAtPosition(x, y);
+    if (dropTarget) {
+        dropTarget.classList.add('drag-over');
+    }
+}
+
+function findDropTargetAtPosition(x, y) {
+    // Hide the drag preview temporarily to get element underneath
+    if (dragPreview) {
+        dragPreview.style.display = 'none';
+    }
+    
+    const elementAtPosition = document.elementFromPoint(x, y);
+    
+    if (dragPreview) {
+        dragPreview.style.display = 'block';
+    }
+    
+    if (!elementAtPosition) return null;
+    
+    // Find the actual drop target (tier-items, image-pool-container, etc.)
+    let dropTarget = elementAtPosition.closest('.tier-items, .image-pool-container, .pinned-pool-container, .pinned-pool-row');
+    
+    return dropTarget;
+}
+
+function cleanupTouchDrag() {
+    isDragging = false;
+    
+    if (dragPreview) {
+        dragPreview.remove();
+        dragPreview = null;
+    }
+    
+    if (draggedElement) {
+        draggedElement.style.opacity = '1';
+        draggedElement.classList.remove('dragging');
+        draggedElement = null;
+    }
+    
+    // Remove all drag-over classes
+    document.querySelectorAll('.drag-over').forEach(el => {
+        el.classList.remove('drag-over');
     });
 }
 

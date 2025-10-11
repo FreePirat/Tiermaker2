@@ -689,11 +689,58 @@
     .controls {
         flex-direction: column;
         align-items: stretch;
+        gap: 15px;
     }
     
     .left-controls,
     .center-controls,
     .right-controls {
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    /* Pool controls - allow wrapping */
+    .pool-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: center;
+    }
+    
+    .pool-header {
+        flex-direction: column;
+        gap: 10px;
+        align-items: stretch;
+    }
+    
+    /* Tier management controls - allow wrapping */
+    .tier-management {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: center;
+    }
+    
+    /* Make tier management buttons auto-size to content */
+    .tier-management .control-btn {
+        white-space: nowrap;
+        padding: 10px 16px;
+        min-width: auto;
+        width: auto;
+        flex: 0 0 auto; /* Don't grow or shrink, auto width */
+    }
+    
+    /* Image size controls - stack vertically on mobile */
+    .image-size-controls {
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .radio-group {
+        display: flex;
+        gap: 10px;
         justify-content: center;
         flex-wrap: wrap;
     }
@@ -711,10 +758,26 @@
         height: 56px;
     }
     
-    .pool-header {
+    /* Make buttons more touch-friendly */
+    .control-btn {
+        min-height: 44px; /* iOS recommended touch target size */
+        padding: 10px 12px;
+        font-size: 13px;
+        white-space: nowrap;
+    }
+    
+    /* Thumbnail controls - stack vertically */
+    .thumbnail-upload-section {
+        display: flex;
         flex-direction: column;
-        gap: 10px;
-        align-items: stretch;
+        gap: 8px;
+        width: 100%;
+    }
+    
+    .thumbnail-btn {
+        min-height: 44px;
+        padding: 10px 15px;
+        font-size: 13px;
     }
 }
 
@@ -733,13 +796,65 @@
     }
     
     .control-btn {
-        padding: 8px 12px;
+        padding: 12px 8px;
         font-size: 12px;
+        min-height: 44px;
+        flex: 1;
+        min-width: 0; /* Allow buttons to shrink */
     }
     
     .save-btn {
-        padding: 10px 20px;
+        padding: 12px 20px;
         font-size: 14px;
+        min-height: 48px;
+        width: 100%;
+    }
+    
+    /* Make pool controls stack in smaller groups */
+    .pool-controls {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .pool-controls .control-btn {
+        width: 100%;
+        text-align: center;
+    }
+    
+    /* Tier management - use better sizing for tight space */
+    .tier-management .control-btn {
+        font-size: 12px;
+        padding: 10px 12px;
+        white-space: nowrap;
+        flex: 0 0 auto;
+        min-width: auto;
+    }
+    
+    /* Make radio options more touch-friendly */
+    .radio-option {
+        min-height: 44px;
+        padding: 8px 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    /* Template info section improvements */
+    .template-name-input,
+    .template-description-input,
+    .template-category-select {
+        font-size: 16px; /* Prevent zoom on iOS */
+        min-height: 44px;
+    }
+    
+    /* Thumbnail section stack vertically */
+    .thumbnail-selection {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .thumbnail-preview {
+        align-self: center;
     }
 }
 
@@ -1146,5 +1261,103 @@ body.pinned-pool-active {
     
     body.pinned-pool-active {
         padding-bottom: 160px;
+    }
+    
+    /* Additional mobile improvements for pinned pool */
+    .pinned-pool-header {
+        padding: 8px 15px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+    
+    .pinned-pool-toggle {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 8px;
+    }
+}
+
+/* Touch drag preview styles */
+.touch-drag-preview {
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    border: 2px solid #ff6b9d;
+    border-radius: 8px;
+    transition: none !important;
+}
+
+.touch-drag-preview img {
+    pointer-events: none;
+}
+
+.touch-drag-preview .remove-btn {
+    display: none;
+}
+
+/* Disable text selection and improve touch handling */
+.tier-item,
+.pinned-character {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+
+/* Improve touch targets */
+@media (pointer: coarse) {
+    .tier-item,
+    .pinned-character {
+        touch-action: none; /* Disable browser touch behaviors */
+        user-select: none;
+    }
+    
+    .control-btn,
+    .save-btn,
+    .upload-btn {
+        min-height: 44px;
+        min-width: 44px;
+    }
+    
+    .color-picker {
+        min-width: 44px;
+        min-height: 44px;
+    }
+    
+    .tier-drag-handle {
+        min-width: 44px;
+        min-height: 44px;
+        touch-action: none;
+    }
+    
+    /* Ensure tier labels are touch-friendly */
+    .tier-label {
+        min-height: 44px;
+        touch-action: manipulation;
+    }
+}
+
+/* Very small screens */
+@media (max-width: 360px) {
+    .control-btn {
+        font-size: 10px;
+        padding: 8px 4px;
+    }
+    
+    .tier-management {
+        gap: 4px;
+    }
+    
+    .pool-controls {
+        gap: 6px;
+    }
+    
+    .radio-group {
+        gap: 6px;
+    }
+    
+    .radio-option {
+        font-size: 12px;
+        padding: 6px 8px;
     }
 }

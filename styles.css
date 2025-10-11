@@ -128,6 +128,40 @@ body {
     text-decoration: none;
 }
 
+/* User info section */
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 14px;
+}
+
+.user-info span {
+    color: #ffffff;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.logout-btn {
+    background-color: #ff6b6b;
+    color: white;
+    border: none;
+    padding: 4px 12px;
+    border-radius: 15px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    white-space: nowrap;
+}
+
+.logout-btn:hover {
+    background-color: #ff5252;
+}
+
 .container {
     max-width: 1200px;
     margin: 0 auto;
@@ -318,10 +352,37 @@ body {
     .nav-right {
         order: 2;
         gap: 15px;
+        flex-wrap: wrap;
+        justify-content: center;
     }
     
     .nav-link {
         font-size: 13px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+    }
+    
+    .login-btn,
+    .logout-btn {
+        min-height: 44px;
+        padding: 8px 16px;
+    }
+    
+    .user-info {
+        min-height: 44px;
+        padding: 8px 12px;
+        gap: 10px;
+    }
+    
+    .user-info span {
+        font-size: 13px;
+    }
+    
+    .logout-btn {
+        padding: 6px 12px;
+        font-size: 12px;
     }
     
     .container {
@@ -346,12 +407,54 @@ body {
         font-size: 13px !important;
         min-height: 32px;
     }
+    
+    /* Make like buttons more touch-friendly */
+    .like-btn {
+        min-height: 32px;
+        min-width: 44px;
+        padding: 6px 8px;
+    }
+    
+    /* Search improvements */
+    .search-input {
+        font-size: 16px; /* Prevent zoom on iOS */
+        min-height: 44px;
+    }
+    
+    .search-btn {
+        min-height: 44px;
+        min-width: 44px;
+    }
 }
 
 @media (max-width: 480px) {
     .nav-right {
         flex-wrap: wrap;
         justify-content: center;
+        gap: 8px;
+    }
+    
+    .nav-link {
+        font-size: 12px;
+        padding: 6px 10px;
+    }
+    
+    .user-info {
+        flex-direction: column;
+        text-align: center;
+        gap: 6px;
+        padding: 8px 10px;
+        min-height: auto;
+    }
+    
+    .user-info span {
+        font-size: 12px;
+    }
+    
+    .logout-btn {
+        padding: 6px 10px;
+        font-size: 11px;
+        align-self: center;
     }
     
     .main-header h1 {
@@ -381,12 +484,107 @@ body {
         width: 35px;
         height: 35px;
         font-size: 20px;
-    }
+        min-height: 44px;
+        min-width: 44px;
     }
     
     .template-list {
         margin-left: 10px;
     }
+    
+    /* Improve touch targets for template interaction */
+    .template-item {
+        cursor: pointer;
+        touch-action: manipulation;
+    }
+    
+    .like-btn {
+        min-height: 44px;
+        min-width: 44px;
+        font-size: 14px;
+    }
+    
+    /* Search container improvements */
+    .search-container {
+        display: flex;
+        gap: 8px;
+    }
+    
+    .search-input {
+        flex: 1;
+        min-width: 0;
+    }
+}
+
+/* Improve very small screen experience */
+@media (max-width: 360px) {
+    .nav-container {
+        padding: 10px 15px;
+        gap: 10px;
+    }
+    
+    .logo {
+        font-size: 20px !important;
+    }
+    
+    .nav-link {
+        font-size: 11px;
+        padding: 6px 8px;
+    }
+    
+    .user-info {
+        padding: 6px 8px;
+        gap: 4px;
+    }
+    
+    .user-info span {
+        font-size: 11px;
+    }
+    
+    .logout-btn {
+        padding: 4px 8px;
+        font-size: 10px;
+    }
+    
+    .template-grid {
+        grid-template-columns: repeat(1, 1fr);
+        gap: 8px;
+    }
+    
+    .template-image {
+        width: 90px;
+        height: 90px;
+    }
+    
+    .template-title {
+        font-size: 11px !important;
+        min-height: 24px;
+    }
+    
+    .main-header h1 {
+        font-size: 20px;
+    }
+    
+    .container {
+        padding: 8px;
+    }
+}
+
+/* Prevent horizontal scrolling on mobile */
+@media (max-width: 768px) {
+    body {
+        overflow-x: hidden;
+    }
+    
+    .template-grid-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .template-list {
+        overflow: hidden;
+    }
+}
 
 a {
     transition: all 0.2s ease;
