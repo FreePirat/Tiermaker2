@@ -622,6 +622,11 @@
     align-items: center;
 }
 
+.right-controls {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
 .control-btn {
     background-color: #404040;
     color: white;
@@ -663,6 +668,46 @@
     background-color: #1e7e34;
 }
 
+.export-image-btn {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    margin-right: 10px;
+}
+
+.export-image-btn:hover {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+}
+
+.export-image-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+}
+
+/* Loading state for export button */
+.export-image-btn.loading {
+    background: linear-gradient(135deg, #6b7280, #4b5563);
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.export-image-btn.loading {
+    opacity: 0.7;
+}
+
 .format-select,
 .sort-select {
     background-color: #404040;
@@ -698,6 +743,12 @@
         justify-content: center;
         flex-wrap: wrap;
         gap: 8px;
+    }
+    
+    .right-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
     }
     
     /* Pool controls - allow wrapping */
@@ -808,6 +859,15 @@
         font-size: 14px;
         min-height: 48px;
         width: 100%;
+    }
+    
+    .export-image-btn {
+        padding: 12px 20px;
+        font-size: 14px;
+        min-height: 48px;
+        width: 100%;
+        margin-right: 0;
+        margin-bottom: 10px;
     }
     
     /* Make pool controls stack in smaller groups */

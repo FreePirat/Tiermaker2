@@ -6,8 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="create-template.css">
-    <link rel="stylesheet" href="creator-styles.css">
+    <!-- Removed broken creator-styles.css link -->
     <script src="github-storage.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dom-to-image-more@2.8.0/dist/dom-to-image-more.min.js"></script>
 </head>
 <body>
     <nav class="main-navbar">
@@ -127,7 +128,7 @@
                     <div class="tier-controls">
                         <input type="color" class="color-picker" value="#ff0000" title="Change tier color">
                     </div>
-                    <div class="tier-items" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+                    <div class="tier-items"></div>
                     <div class="tier-drag-handle" title="Drag to reorder tiers">⋮⋮</div>
                 </div>
                 <div class="tier-row" data-tier="A" data-color="#ff8000">
@@ -135,7 +136,7 @@
                     <div class="tier-controls">
                         <input type="color" class="color-picker" value="#ff8000" title="Change tier color">
                     </div>
-                    <div class="tier-items" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+                    <div class="tier-items"></div>
                     <div class="tier-drag-handle" title="Drag to reorder tiers">⋮⋮</div>
                 </div>
                 <div class="tier-row" data-tier="B" data-color="#ffbf00">
@@ -143,7 +144,7 @@
                     <div class="tier-controls">
                         <input type="color" class="color-picker" value="#ffbf00" title="Change tier color">
                     </div>
-                    <div class="tier-items" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+                    <div class="tier-items"></div>
                     <div class="tier-drag-handle" title="Drag to reorder tiers">⋮⋮</div>
                 </div>
                 <div class="tier-row" data-tier="C" data-color="#ffff00">
@@ -151,7 +152,7 @@
                     <div class="tier-controls">
                         <input type="color" class="color-picker" value="#ffff00" title="Change tier color">
                     </div>
-                    <div class="tier-items" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+                    <div class="tier-items"></div>
                     <div class="tier-drag-handle" title="Drag to reorder tiers">⋮⋮</div>
                 </div>
                 <div class="tier-row" data-tier="D" data-color="#00ff00">
@@ -159,7 +160,7 @@
                     <div class="tier-controls">
                         <input type="color" class="color-picker" value="#00ff00" title="Change tier color">
                     </div>
-                    <div class="tier-items" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+                    <div class="tier-items"></div>
                     <div class="tier-drag-handle" title="Drag to reorder tiers">⋮⋮</div>
                 </div>
             </div>
@@ -204,6 +205,7 @@
                 </div>
                 
                 <div class="right-controls">
+                    <button class="export-image-btn" onclick="exportTierListAsImage()">📷 Save Template as Image</button>
                     <button class="save-btn" onclick="saveTemplate()">✅ Save Template</button>
                 </div>
             </div>

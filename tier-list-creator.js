@@ -963,55 +963,54 @@ function drop(e) {
     
     // Handle pinned character drops
     if (draggedElement.classList.contains('pinned-character')) {
-        // Create a new tier item from the pinned character
+        // Only allow dropping pinned characters into tier rows
+        if (!dropTarget.classList.contains('tier-items')) {
+            // Ignore drops onto image pool or pinned pool to avoid creating duplicates
+            console.log('Ignored drop of pinned-character on non-tier area');
+            return;
+        }
+        // Only create and insert a new tier item, do NOT append the dragged pinned character itself
         const newItem = document.createElement('div');
         newItem.className = 'tier-item';
         newItem.draggable = true;
-        
+
         const img = document.createElement('img');
         img.src = draggedElement.dataset.src;
         img.alt = 'Character';
-        
+
         const removeBtn = document.createElement('button');
         removeBtn.className = 'remove-btn';
         removeBtn.innerHTML = '×';
         removeBtn.onclick = removeImage;
-        
+
         newItem.appendChild(img);
         newItem.appendChild(removeBtn);
-        
+
         // Setup drag events for the new item
         setupDragEvents(newItem);
-        
+
         // Apply current size class to the new item
         const selectedRadio = document.querySelector('input[name="imageSize"]:checked');
         const currentSize = selectedRadio ? selectedRadio.value : 'medium';
         const sizeClass = `size-${currentSize}`;
         newItem.classList.add(sizeClass);
-        
+
         // Handle positioning within tier rows
-        if (dropTarget.classList.contains('tier-items')) {
-            insertAtPosition(dropTarget, newItem, e.clientX, e.clientY);
-        } else {
-            dropTarget.appendChild(newItem);
-        }
-        
-        // Remove the original image from the main pool
+        insertAtPosition(dropTarget, newItem, e.clientX, e.clientY);
+
+        // Remove the original image from the pool
         const poolContainer = document.querySelector('.image-pool-container');
         const originalImages = poolContainer.querySelectorAll('.tier-item img');
-        
         for (let originalImg of originalImages) {
             if (originalImg.src === draggedElement.dataset.src) {
-                // Remove the parent tier-item
                 const tierItem = originalImg.closest('.tier-item');
                 if (tierItem) {
                     tierItem.remove();
-                    break; // Only remove the first match
+                    break;
                 }
             }
         }
-        
-        // Update the pinned pool to reflect the change
+
         updatePinnedPool();
     } else {
         // Handle regular drops (existing tier items)
@@ -1091,7 +1090,7 @@ function addTierRow() {
         <div class="tier-controls">
             <input type="color" class="color-picker" value="${defaultColor}" title="Change tier color">
         </div>
-        <div class="tier-items" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+        <div class="tier-items"></div>
         <div class="tier-drag-handle" title="Drag to reorder tiers">⋮⋮</div>
     `;
     
@@ -1282,7 +1281,7 @@ function changeTierFormat() {
             <div class="tier-controls">
                 <input type="color" class="color-picker" value="${defaultColor}" title="Change tier color">
             </div>
-            <div class="tier-items" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+            <div class="tier-items"></div>
         `;
         
         // Ensure tier row is NOT draggable
@@ -1997,7 +1996,7 @@ function recreateTierStructure(tiers) {
             <div class="tier-controls">
                 <input type="color" class="color-picker" value="${tierColor}" title="Change tier color">
             </div>
-            <div class="tier-items" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+            <div class="tier-items"></div>
             <div class="tier-drag-handle" title="Drag to reorder tiers">⋮⋮</div>
         `;
         
@@ -2138,6 +2137,9 @@ document.addEventListener('drop', function(e) {
                         e.target.classList.contains('pinned-pool-row');
     
     if (isDropTarget) {
+        e.preventDefault();
+        e.stopPropagation();
+        
         // Create a modified event object where currentTarget is the actual drop target
         const modifiedEvent = {
             ...e,
@@ -2189,7 +2191,15 @@ function populatePinnedPool() {
     pinnedRows.forEach(row => row.innerHTML = '');
     
     // Get all actual images from the main pool (only tier-items with images)
-    const images = Array.from(poolContainer.querySelectorAll('.tier-item img'));
+    // Deduplicate by image src to avoid duplicates in pinned pool
+    const seen = new Set();
+    const images = [];
+    Array.from(poolContainer.querySelectorAll('.tier-item img')).forEach(img => {
+        if (!seen.has(img.src)) {
+            seen.add(img.src);
+            images.push(img);
+        }
+    });
     
     // Only proceed if there are actual images
     if (images.length === 0) {
@@ -2343,6 +2353,10 @@ function setupTouchEvents(element) {
     element.addEventListener('touchend', function(e) {
         if (!isDragging) return;
         
+        // Prevent default to stop synthetic mouse/click/drop events from firing
+        e.preventDefault();
+        e.stopPropagation();
+        
         const touch = e.changedTouches[0];
         const dropTarget = findDropTargetAtPosition(touch.clientX, touch.clientY);
         
@@ -2362,7 +2376,6 @@ function setupTouchEvents(element) {
         
         // Cleanup
         cleanupTouchDrag();
-        e.preventDefault();
     }, { passive: false });
     
     element.addEventListener('touchcancel', function(e) {
@@ -2699,4 +2712,122 @@ function initializeTemplateInfoSection() {
         arrow.classList.add('collapsed');
         arrow.textContent = '▶';
     }
+}
+
+// Export tier list as image - Using dom-to-image-more for accurate rendering
+async function exportTierListAsImage() {
+    const exportBtn = document.querySelector('.export-image-btn');
+    
+    if (!exportBtn) {
+        console.error('Export button not found');
+        return;
+    }
+    
+    // Show loading state
+    const originalText = exportBtn.innerHTML;
+    exportBtn.innerHTML = '⏳ Capturing...';
+    exportBtn.disabled = true;
+    
+    try {
+        // Get the tier list container to capture
+        const tierListContainer = document.querySelector('.tier-list-container');
+        
+        if (!tierListContainer) {
+            throw new Error('Tier list container not found');
+        }
+
+        // Get template name for filename
+        const templateNameInput = document.getElementById('template-name');
+        const templateName = templateNameInput ? templateNameInput.value.trim() : 'tier-list';
+        const sanitizedFileName = (templateName || 'tier-list').replace(/[^a-zA-Z0-9\-_]/g, '_');
+
+        // Hide UI elements temporarily
+        const controlsToHide = tierListContainer.querySelectorAll('.tier-controls, .tier-drag-handle');
+        controlsToHide.forEach(el => el.style.display = 'none');
+
+        // Get actual dimensions of the tier list
+        const width = tierListContainer.offsetWidth;
+        const height = tierListContainer.offsetHeight;
+        
+        // Use dom-to-image-more for high-quality rendering
+        const dataUrl = await domtoimage.toPng(tierListContainer, {
+            quality: 1.0,
+            bgcolor: '#3a3a3a',
+            width: width,
+            height: height,
+            style: {
+                'transform': 'scale(1)',
+                'transform-origin': 'top left'
+            }
+        });
+
+        // Restore hidden elements
+        controlsToHide.forEach(el => el.style.display = '');
+
+        // Download the image
+        const link = document.createElement('a');
+        link.download = `${sanitizedFileName}.png`;
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showMessage('✅ Tier list image downloaded!', 'success');
+        
+    } catch (error) {
+        console.error('Error exporting tier list:', error);
+        showMessage('❌ Error capturing tier list. Please try again.', 'error');
+        
+        // Restore hidden elements in case of error
+        const controlsToHide = document.querySelectorAll('.tier-controls, .tier-drag-handle');
+        controlsToHide.forEach(el => el.style.display = '');
+    } finally {
+        // Restore button state
+        exportBtn.innerHTML = originalText;
+        exportBtn.disabled = false;
+    }
+}
+
+// Helper function to show temporary messages
+function showTempMessage(message, type = 'info') {
+    // Remove any existing temp messages
+    const existingMessage = document.querySelector('.temp-message');
+    if (existingMessage) {
+        existingMessage.remove();
+    }
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `temp-message temp-message-${type}`;
+    messageDiv.textContent = message;
+    messageDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        z-index: 10000;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        transform: translateX(100%);
+    `;
+    
+    document.body.appendChild(messageDiv);
+    
+    // Animate in
+    setTimeout(() => {
+        messageDiv.style.transform = 'translateX(0)';
+    }, 10);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        messageDiv.style.transform = 'translateX(100%)';
+        setTimeout(() => {
+            if (messageDiv.parentNode) {
+                messageDiv.remove();
+            }
+        }, 300);
+    }, 3000);
 }
