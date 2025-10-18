@@ -267,30 +267,69 @@ class GitHubStorage {
         let sha = null;
         let action = 'Add';
         
-        // Check if file already exists (for updates)
+        // First check if template exists in main repository (for updates)
+        let existsInMain = false;
         try {
-            const existingResponse = await fetch(
-                `${this.apiBase}/repos/${forkOwner}/${this.repo}/contents/${filePath}`,
+            const mainRepoResponse = await fetch(
+                `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${filePath}`,
                 {
                     headers: {
-                        'Authorization': `token ${this.accessToken}`,
                         'Accept': 'application/vnd.github.v3+json'
                     }
                 }
             );
             
-            if (existingResponse.ok) {
-                const existingFile = await existingResponse.json();
-                sha = existingFile.sha;
+            if (mainRepoResponse.ok) {
+                existsInMain = true;
                 action = 'Update';
-                console.log('Existing template found, updating with SHA:', sha);
-            } else if (existingResponse.status === 404) {
-                console.log('Template not found in fork, creating new file');
-            } else {
-                console.warn('Unexpected response when checking for existing file:', existingResponse.status);
+                console.log('Template exists in main repository, this is an update');
             }
         } catch (error) {
-            console.log('Could not check for existing file (will create new):', error.message);
+            console.log('Template not found in main repository, creating new');
+        }
+        
+        // If updating existing template, check if it exists in fork and get SHA
+        if (existsInMain) {
+            try {
+                const forkResponse = await fetch(
+                    `${this.apiBase}/repos/${forkOwner}/${this.repo}/contents/${filePath}`,
+                    {
+                        headers: {
+                            'Authorization': `token ${this.accessToken}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    }
+                );
+                
+                if (forkResponse.ok) {
+                    const existingFile = await forkResponse.json();
+                    sha = existingFile.sha;
+                    console.log('Found existing file in fork, updating with SHA:', sha);
+                } else if (forkResponse.status === 404) {
+                    // Template exists in main repo but not in fork
+                    // We need to get the SHA from main repo to properly update
+                    console.log('Template not in fork but exists in main repo, this is a fork-based update');
+                    
+                    const mainRepoFileResponse = await fetch(
+                        `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${filePath}`,
+                        {
+                            headers: {
+                                'Accept': 'application/vnd.github.v3+json'
+                            }
+                        }
+                    );
+                    
+                    if (mainRepoFileResponse.ok) {
+                        const mainFile = await mainRepoFileResponse.json();
+                        console.log('Will create update based on main repo file SHA:', mainFile.sha);
+                        // Don't set SHA here - this is a new file in the fork that will update main repo
+                    }
+                } else {
+                    console.warn('Unexpected response when checking fork for existing file:', forkResponse.status);
+                }
+            } catch (error) {
+                console.log('Could not check for existing file in fork:', error.message);
+            }
         }
         
         const commitData = {
@@ -299,10 +338,17 @@ class GitHubStorage {
             branch: this.branch
         };
         
-        // Include SHA for updates
+        // Only include SHA if we found the file in the fork (not main repo)
         if (sha) {
             commitData.sha = sha;
         }
+
+        console.log('Creating/updating file in fork with data:', {
+            action,
+            filePath,
+            hasSha: !!sha,
+            existsInMain
+        });
 
         const response = await fetch(
             `${this.apiBase}/repos/${forkOwner}/${this.repo}/contents/${filePath}`,
@@ -331,7 +377,7 @@ class GitHubStorage {
             if (response.status === 409) {
                 errorMessage = 'File conflict detected. The template may have been modified by another user. Please try again.';
             } else if (response.status === 422 && errorData.message.includes('sha')) {
-                errorMessage = 'File version mismatch. The template may have been updated by another user. Please reload and try again.';
+                errorMessage = 'File version mismatch. Please refresh and try updating again.';
             }
             
             throw new Error(errorMessage);
