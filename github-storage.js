@@ -128,9 +128,7 @@ class GitHubStorage {
                 `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${this.templatesPath}${cacheBuster}`,
                 {
                     headers: {
-                        'Accept': 'application/vnd.github.v3+json',
-                        'Cache-Control': 'no-cache, no-store, must-revalidate',
-                        'Pragma': 'no-cache'
+                        'Accept': 'application/vnd.github.v3+json'
                     }
                 }
             );
@@ -149,12 +147,7 @@ class GitHubStorage {
             // Fetch each template file with cache-busting
             for (const file of files.filter(f => f.name.endsWith('.json'))) {
                 try {
-                    const templateResponse = await fetch(`${file.download_url}${cacheBuster}`, {
-                        headers: {
-                            'Cache-Control': 'no-cache, no-store, must-revalidate',
-                            'Pragma': 'no-cache'
-                        }
-                    });
+                    const templateResponse = await fetch(`${file.download_url}${cacheBuster}`);
                     const template = await templateResponse.json();
                     templates.push(template);
                 } catch (error) {
@@ -177,9 +170,7 @@ class GitHubStorage {
                 `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${this.templatesPath}/template_${templateId}.json${cacheBuster}`,
                 {
                     headers: {
-                        'Accept': 'application/vnd.github.v3+json',
-                        'Cache-Control': 'no-cache, no-store, must-revalidate',
-                        'Pragma': 'no-cache'
+                        'Accept': 'application/vnd.github.v3+json'
                     }
                 }
             );
@@ -192,12 +183,7 @@ class GitHubStorage {
             }
             
             const file = await response.json();
-            const templateResponse = await fetch(`${file.download_url}${cacheBuster}`, {
-                headers: {
-                    'Cache-Control': 'no-cache, no-store, must-revalidate',
-                    'Pragma': 'no-cache'
-                }
-            });
+            const templateResponse = await fetch(`${file.download_url}${cacheBuster}`);
             const template = await templateResponse.json();
             
             return template;
@@ -676,9 +662,7 @@ ${isUpdate ? `This is an update to an existing template with new content.
                 {
                     headers: {
                         'Authorization': `token ${this.accessToken}`,
-                        'Accept': 'application/vnd.github.v3+json',
-                        'Cache-Control': 'no-cache, no-store, must-revalidate',
-                        'Pragma': 'no-cache'
+                        'Accept': 'application/vnd.github.v3+json'
                     }
                 }
             );
@@ -692,12 +676,7 @@ ${isUpdate ? `This is an update to an existing template with new content.
             
             for (const file of files.filter(f => f.name.endsWith('.json'))) {
                 try {
-                    const templateResponse = await fetch(`${file.download_url}${cacheBuster}`, {
-                        headers: {
-                            'Cache-Control': 'no-cache, no-store, must-revalidate',
-                            'Pragma': 'no-cache'
-                        }
-                    });
+                    const templateResponse = await fetch(`${file.download_url}${cacheBuster}`);
                     const template = await templateResponse.json();
                     
                     // Only include templates created by current user
