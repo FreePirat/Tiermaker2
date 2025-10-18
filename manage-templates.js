@@ -3,24 +3,137 @@
 let templates = [];
 let templateToDelete = null;
 
-// Safe localStorage operations
-function saveTemplates() {
+// Advanced localStorage operations with storage management
+async function saveTemplates() {
     try {
         if (typeof(Storage) !== "undefined") {
-            // Save ALL templates to localStorage, including public ones
-            // This ensures proper tracking for deletion purposes
-            // Public templates need to be tracked locally so we know to delete them from GitHub too
-            localStorage.setItem('tierTemplates', JSON.stringify(templates));
-            return true;
+            return await saveTemplatesWithOptimization(templates);
         } else {
             showMessage('Cannot save: Local storage not supported', 'error');
             return false;
         }
     } catch (error) {
         console.error('Error saving templates:', error);
-        showMessage('Error saving templates. Storage may be full.', 'error');
+        showMessage('Error saving templates: ' + error.message, 'error');
         return false;
     }
+}
+
+// Advanced Storage Management (same as in tier-list-creator.js)
+async function saveTemplatesWithOptimization(templates) {
+    try {
+        // First attempt: normal save
+        const dataToStore = JSON.stringify(templates);
+        const sizeInMB = (new Blob([dataToStore]).size / 1024 / 1024).toFixed(2);
+        
+        console.log('Attempting to save', sizeInMB, 'MB to localStorage');
+        
+        try {
+            localStorage.setItem('tierTemplates', dataToStore);
+            return true;
+        } catch (quotaError) {
+            if (quotaError.name !== 'QuotaExceededError') {
+                throw quotaError;
+            }
+        }
+        
+        // Storage is full - try optimization
+        console.warn('Storage quota exceeded, attempting optimization...');
+        
+        // Clean up old local templates
+        const oldLocalTemplates = templates.filter(t => 
+            !t.isPublic && !t.public && 
+            t.id.startsWith('template_') &&
+            Date.now() - parseInt(t.id.split('_')[1]) > 30 * 24 * 60 * 60 * 1000
+        );
+        
+        if (oldLocalTemplates.length > 0) {
+            const shouldCleanup = confirm(
+                `Storage is full! Found ${oldLocalTemplates.length} local templates older than 30 days.\n\n` +
+                'Delete them to make room? (Your public templates will be preserved)'
+            );
+            
+            if (shouldCleanup) {
+                const optimizedTemplates = templates.filter(t => !oldLocalTemplates.includes(t));
+                try {
+                    localStorage.setItem('tierTemplates', JSON.stringify(optimizedTemplates));
+                    templates.length = 0;
+                    templates.push(...optimizedTemplates);
+                    showMessage(`Cleaned up ${oldLocalTemplates.length} old templates`, 'success');
+                    renderTemplates(); // Refresh the display
+                    return true;
+                } catch (error) {
+                    console.error('Still not enough space after cleanup:', error);
+                }
+            }
+        }
+        
+        // Show storage management options
+        showStorageManagementDialog();
+        return false;
+        
+    } catch (error) {
+        console.error('Storage optimization failed:', error);
+        showMessage('Failed to save: ' + error.message, 'error');
+        return false;
+    }
+}
+
+function showStorageManagementDialog() {
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.8); z-index: 10000; display: flex;
+        align-items: center; justify-content: center; padding: 20px;
+    `;
+    
+    dialog.innerHTML = `
+        <div style="background: #2a2a2a; padding: 30px; border-radius: 12px; max-width: 500px; color: white;">
+            <h3 style="margin-top: 0; color: #ff6b6b;">🚨 Storage Full</h3>
+            <p>Your browser's storage is full. You need to free up space to save changes.</p>
+            <p><strong>Current templates: ${templates.length}</strong></p>
+            <div style="margin: 20px 0;">
+                <button onclick="cleanupOldTemplates()" 
+                        style="background: #f39c12; border: none; padding: 10px 15px; border-radius: 8px; color: white; margin: 5px; cursor: pointer; display: block; width: 100%;">
+                    🗑️ Delete templates older than 30 days
+                </button>
+                <button onclick="exportAllTemplates()" 
+                        style="background: #27ae60; border: none; padding: 10px 15px; border-radius: 8px; color: white; margin: 5px; cursor: pointer; display: block; width: 100%;">
+                    💾 Export all templates as backup
+                </button>
+                <button onclick="this.parentElement.parentElement.parentElement.remove()" 
+                        style="background: #666; border: none; padding: 10px 15px; border-radius: 8px; color: white; margin: 5px; cursor: pointer; display: block; width: 100%;">
+                    ❌ Cancel
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(dialog);
+    
+    // Add helper functions to window for the dialog buttons
+    window.cleanupOldTemplates = () => {
+        const oldTemplates = templates.filter(t => 
+            !t.isPublic && !t.public && 
+            t.id.startsWith('template_') &&
+            Date.now() - parseInt(t.id.split('_')[1]) > 30 * 24 * 60 * 60 * 1000
+        );
+        
+        if (oldTemplates.length > 0) {
+            templates = templates.filter(t => !oldTemplates.includes(t));
+            localStorage.setItem('tierTemplates', JSON.stringify(templates));
+            renderTemplates();
+            showMessage(`Deleted ${oldTemplates.length} old templates`, 'success');
+        } else {
+            showMessage('No old templates found to delete', 'info');
+        }
+        dialog.remove();
+    };
+    
+    window.exportAllTemplates = () => {
+        exportTemplates();
+        dialog.remove();
+    };
 }
 
 document.addEventListener('DOMContentLoaded', async function() {
@@ -159,11 +272,12 @@ function createTemplateCard(template) {
             <div class="template-info">
                 <div class="template-meta">
                     <span>Created: ${createdDate}</span>
+                    ${template.updatedAt ? `<span>Last updated: ${new Date(template.updatedAt).toLocaleDateString()}</span>` : ''}
                 </div>
                 
                 <div class="template-actions">
                     <a href="create-template.html?${template.isPublic ? `template=${template.id}&public=true&edit=true` : `edit=${template.id}`}" class="action-btn edit-btn">
-                        ✏️ Edit
+                        ✏️ Update Template
                     </a>
                     <button class="action-btn duplicate-btn" onclick="duplicateTemplate('${template.id}')">
                         📋 Duplicate

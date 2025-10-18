@@ -668,6 +668,41 @@
     background-color: #1e7e34;
 }
 
+.save-btn.update-mode {
+    background-color: #f39c12;
+    position: relative;
+}
+
+.save-btn.update-mode:hover {
+    background-color: #e67e22;
+}
+
+.save-btn.update-mode::before {
+    content: '';
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 4px;
+    background-color: #fff;
+    border-radius: 50%;
+    animation: updatePulse 2s infinite;
+}
+
+@keyframes updatePulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+.save-btn.copy-mode {
+    background-color: #6c5ce7;
+}
+
+.save-btn.copy-mode:hover {
+    background-color: #5a4fcf;
+}
+
 .export-image-btn {
     background: linear-gradient(135deg, #3b82f6, #2563eb);
     color: white;

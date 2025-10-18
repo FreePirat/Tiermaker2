@@ -671,7 +671,9 @@ async function loadTemplate() {
         const template = templates.find(t => t.id === templateId);
         if (template) {
             loadTemplateData(template, false, true);
-            document.querySelector('.save-btn').textContent = '✅ Update Template';
+            const saveBtn = document.querySelector('.save-btn');
+            saveBtn.textContent = '🔄 Update Template';
+            saveBtn.classList.add('update-mode');
         }
     } else if (templateParam && publicTemplate) {
         // Load public template
@@ -683,12 +685,16 @@ async function loadTemplate() {
                     template.creator && template.creator.username === githubStorage.currentUser?.login) {
                     // User is editing their own public template
                     loadTemplateData(template, false, true);
-                    document.querySelector('.save-btn').textContent = '✅ Update Public Template';
+                    const saveBtn = document.querySelector('.save-btn');
+                    saveBtn.textContent = '🔄 Update Public Template';
+                    saveBtn.classList.add('update-mode');
                     document.getElementById('share-publicly').checked = true;
                 } else {
                     // User is copying someone else's template or not editing
                     loadTemplateData(template, true, false);
-                    document.querySelector('.save-btn').textContent = '✅ Save as New Template';
+                    const saveBtn = document.querySelector('.save-btn');
+                    saveBtn.textContent = '✅ Save as New Template';
+                    saveBtn.classList.add('copy-mode');
                 }
             }
         } catch (error) {
@@ -1801,10 +1807,16 @@ async function saveTemplate() {
     }
     
     const sharePublicly = document.getElementById('share-publicly').checked;
+    const isUpdating = !!currentTemplate.id && templates.some(t => t.id === currentTemplate.id);
     
-    // Generate ID if new template
+    // Set creation/update timestamps
     if (!currentTemplate.id) {
+        // New template
         currentTemplate.id = 'template_' + Date.now();
+        currentTemplate.createdAt = new Date().toISOString();
+    } else {
+        // Updating existing template
+        currentTemplate.updatedAt = new Date().toISOString();
     }
     
     // Mark template as public if sharing publicly
@@ -1816,54 +1828,25 @@ async function saveTemplate() {
     // Save locally first
     const existingIndex = templates.findIndex(t => t.id === currentTemplate.id);
     if (existingIndex >= 0) {
+        // Update existing template
         templates[existingIndex] = { ...currentTemplate };
     } else {
+        // Add new template
         templates.push({ ...currentTemplate });
-    }    // Save to localStorage with error handling
+    }    // Save to localStorage with advanced storage management
     try {
         if (typeof(Storage) !== "undefined") {
-            const dataToStore = JSON.stringify(templates);
-            const sizeInMB = (new Blob([dataToStore]).size / 1024 / 1024).toFixed(2);
-            
-            console.log('Attempting to save', sizeInMB, 'MB to localStorage');
-            
-            // Check if storage is getting full (warn at 4MB, typical limit is 5-10MB)
-            if (sizeInMB > 4) {
-                console.warn('Storage size is getting large:', sizeInMB, 'MB');
-                
-                // Offer to clean up old LOCAL templates only
-                const oldLocalTemplates = templates.filter(t => 
-                    !t.isPublic && !t.public && // Only clean up local templates, not public ones
-                    Date.now() - new Date(t.id.split('_')[1]).getTime() > 30 * 24 * 60 * 60 * 1000 // 30 days
-                );
-                
-                if (oldLocalTemplates.length > 0) {
-                    const cleanup = confirm(`Storage is getting full (${sizeInMB}MB). Delete ${oldLocalTemplates.length} old local templates older than 30 days?`);
-                    if (cleanup) {
-                        templates = templates.filter(t => !oldLocalTemplates.includes(t));
-                        // Save all templates to localStorage, including public ones for proper deletion tracking
-                        localStorage.setItem('tierTemplates', JSON.stringify(templates));
-                        showMessage(`Cleaned up ${oldLocalTemplates.length} old local templates`, 'info');
-                        return; // Exit early since we already saved
-                    }
-                }
+            // Attempt to save with storage optimization
+            if (!await saveTemplatesWithOptimization(templates)) {
+                return; // Failed to save even after optimization
             }
-            
-            // Save ALL templates to localStorage, including public ones for proper deletion tracking
-            // This ensures that when a user deletes a template they created and shared publicly,
-            // the manage-templates.js can properly identify it as public and delete from GitHub too
-            localStorage.setItem('tierTemplates', JSON.stringify(templates));
         } else {
             showMessage('Cannot save: Local storage not supported', 'error');
             return;
         }
     } catch (error) {
         console.error('Error saving template:', error);
-        if (error.name === 'QuotaExceededError') {
-            showMessage('Storage is full. Try deleting some old templates from the manage page.', 'error');
-        } else {
-            showMessage('Error saving template: ' + error.message, 'error');
-        }
+        showMessage('Error saving template: ' + error.message, 'error');
         return;
     }
     
@@ -1876,14 +1859,17 @@ async function saveTemplate() {
             const result = await githubStorage.saveTemplate(publicTemplate);
             
             if (result && result.success) {
-                showMessage('Template saved locally and submitted as Pull Request! 🎉', 'success');
+                const action = isUpdating ? 'updated' : 'saved';
+                showMessage(`Template ${action} locally and submitted as Pull Request! 🎉`, 'success');
                 if (result.pullRequestUrl) {
                     console.log('Pull Request URL:', result.pullRequestUrl);
                 }
             } else if (result && result.local) {
-                showMessage('Template saved locally! (Public sharing not available)', 'success');
+                const action = isUpdating ? 'updated' : 'saved';
+                showMessage(`Template ${action} locally! (Public sharing not available)`, 'success');
             } else {
-                showMessage('Template saved locally and submitted to repository!', 'success');
+                const action = isUpdating ? 'updated' : 'saved';
+                showMessage(`Template ${action} locally and submitted to repository!`, 'success');
             }
         } catch (error) {
             console.error('Error submitting template:', error);
@@ -1899,10 +1885,12 @@ async function saveTemplate() {
                 
                 if (useAlternative) {
                     downloadTemplateAsJSON();
-                    showMessage('Template saved locally and downloaded! Check console for manual submission instructions.', 'success');
+                    const action = isUpdating ? 'updated' : 'saved';
+                    showMessage(`Template ${action} locally and downloaded! Check console for manual submission instructions.`, 'success');
                     logManualSubmissionInstructions();
                 } else {
-                    showMessage('Template saved locally! (GitHub authentication required for public sharing)', 'warning');
+                    const action = isUpdating ? 'updated' : 'saved';
+                    showMessage(`Template ${action} locally! (GitHub authentication required for public sharing)`, 'warning');
                 }
             } else if (error.message.includes('fork') || error.message.includes('pull request') || error.message.includes('GitHub')) {
                 // GitHub-specific errors - offer download option
@@ -1914,19 +1902,23 @@ async function saveTemplate() {
                 
                 if (useAlternative) {
                     downloadTemplateAsJSON();
-                    showMessage('Template saved locally and downloaded! Check console for manual submission instructions.', 'success');
+                    const action = isUpdating ? 'updated' : 'saved';
+                    showMessage(`Template ${action} locally and downloaded! Check console for manual submission instructions.`, 'success');
                     logManualSubmissionInstructions();
                 } else {
-                    showMessage('Template saved locally, but failed to submit publicly: ' + error.message, 'warning');
+                    const action = isUpdating ? 'updated' : 'saved';
+                    showMessage(`Template ${action} locally, but failed to submit publicly: ${error.message}`, 'warning');
                 }
             } else {
                 // Other errors - just show warning without interrupting workflow
-                showMessage('Template saved locally, but public submission failed: ' + error.message, 'warning');
+                const action = isUpdating ? 'updated' : 'saved';
+                showMessage(`Template ${action} locally, but public submission failed: ${error.message}`, 'warning');
                 console.error('Public submission error details:', error);
             }
         }
     } else {
-        showMessage('Template saved locally!', 'success');
+        const action = isUpdating ? 'updated' : 'saved';
+        showMessage(`Template ${action} locally!`, 'success');
     }
 
     // Helper function to download template as JSON
@@ -1964,6 +1956,178 @@ async function saveTemplate() {
     setTimeout(() => {
         window.location.href = 'manage-templates.html';
     }, 2000);
+}
+
+// Advanced Storage Management Functions
+async function saveTemplatesWithOptimization(templates) {
+    try {
+        // First attempt: normal save
+        const dataToStore = JSON.stringify(templates);
+        const sizeInMB = (new Blob([dataToStore]).size / 1024 / 1024).toFixed(2);
+        
+        console.log('Attempting to save', sizeInMB, 'MB to localStorage');
+        
+        try {
+            localStorage.setItem('tierTemplates', dataToStore);
+            return true; // Success on first attempt
+        } catch (quotaError) {
+            if (quotaError.name !== 'QuotaExceededError') {
+                throw quotaError; // Re-throw if it's not a quota error
+            }
+        }
+        
+        // If we reach here, storage is full - try optimization strategies
+        console.warn('Storage quota exceeded, attempting optimization...');
+        
+        // Strategy 1: Clean up old local templates (30+ days old)
+        const oldLocalTemplates = templates.filter(t => 
+            !t.isPublic && !t.public && 
+            t.id.startsWith('template_') &&
+            Date.now() - parseInt(t.id.split('_')[1]) > 30 * 24 * 60 * 60 * 1000
+        );
+        
+        if (oldLocalTemplates.length > 0) {
+            const shouldCleanup = confirm(
+                `Storage is full! Found ${oldLocalTemplates.length} local templates older than 30 days.\n\n` +
+                'Delete them to make room? (Your public templates will be preserved)'
+            );
+            
+            if (shouldCleanup) {
+                const optimizedTemplates = templates.filter(t => !oldLocalTemplates.includes(t));
+                try {
+                    localStorage.setItem('tierTemplates', JSON.stringify(optimizedTemplates));
+                    templates.length = 0; // Clear original array
+                    templates.push(...optimizedTemplates); // Update with cleaned version
+                    showMessage(`Cleaned up ${oldLocalTemplates.length} old templates to make room`, 'info');
+                    return true;
+                } catch (error) {
+                    console.error('Still not enough space after cleanup:', error);
+                }
+            }
+        }
+        
+        // Strategy 2: Compress template data by removing redundant information
+        const compressedTemplates = compressTemplateData(templates);
+        try {
+            localStorage.setItem('tierTemplates', JSON.stringify(compressedTemplates));
+            showMessage('Storage optimized with data compression', 'info');
+            return true;
+        } catch (error) {
+            console.error('Still not enough space after compression:', error);
+        }
+        
+        // Strategy 3: Store only essential templates (public + recent local)
+        const essentialTemplates = templates.filter(t => {
+            if (t.isPublic || t.public) return true; // Keep all public templates
+            if (!t.id.startsWith('template_')) return true; // Keep non-standard IDs
+            
+            // Keep recent local templates (last 7 days)
+            const templateAge = Date.now() - parseInt(t.id.split('_')[1]);
+            return templateAge < 7 * 24 * 60 * 60 * 1000;
+        });
+        
+        if (essentialTemplates.length < templates.length) {
+            const shouldKeepEssential = confirm(
+                `Storage is critically full! Keep only essential templates?\n\n` +
+                `This will keep ${essentialTemplates.length} templates (all public + recent local) ` +
+                `and remove ${templates.length - essentialTemplates.length} older local templates.`
+            );
+            
+            if (shouldKeepEssential) {
+                try {
+                    localStorage.setItem('tierTemplates', JSON.stringify(essentialTemplates));
+                    templates.length = 0;
+                    templates.push(...essentialTemplates);
+                    showMessage('Kept only essential templates to free up space', 'warning');
+                    return true;
+                } catch (error) {
+                    console.error('Even essential templates too large:', error);
+                }
+            }
+        }
+        
+        // Last resort: Show manual cleanup options
+        showStorageFullDialog();
+        return false;
+        
+    } catch (error) {
+        console.error('Storage optimization failed:', error);
+        showMessage('Failed to save template: ' + error.message, 'error');
+        return false;
+    }
+}
+
+function compressTemplateData(templates) {
+    // Create compressed versions of templates to save space
+    return templates.map(template => {
+        const compressed = { ...template };
+        
+        // Compress image data by removing redundant properties
+        if (compressed.images) {
+            compressed.images = compressed.images.map(img => ({
+                src: img.src,
+                name: img.name || '',
+                position: img.position || 'pool'
+            }));
+        }
+        
+        // Remove unnecessary whitespace from descriptions
+        if (compressed.description) {
+            compressed.description = compressed.description.trim();
+        }
+        
+        // Compress tier data
+        if (compressed.tiers) {
+            compressed.tiers = compressed.tiers.map(tier => ({
+                label: tier.label,
+                color: tier.color,
+                items: tier.items.map(item => ({
+                    src: item.src,
+                    name: item.name || ''
+                }))
+            }));
+        }
+        
+        return compressed;
+    });
+}
+
+function showStorageFullDialog() {
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.8); z-index: 10000; display: flex;
+        align-items: center; justify-content: center; padding: 20px;
+    `;
+    
+    dialog.innerHTML = `
+        <div style="background: #2a2a2a; padding: 30px; border-radius: 12px; max-width: 500px; color: white;">
+            <h3 style="margin-top: 0; color: #ff6b6b;">🚨 Storage Full</h3>
+            <p>Your browser's storage is completely full and cannot save more templates.</p>
+            <p><strong>Options to free up space:</strong></p>
+            <ul style="text-align: left; margin: 15px 0;">
+                <li>Go to <strong>Manage Templates</strong> and delete old templates</li>
+                <li>Export your templates as backup, then delete local copies</li>
+                <li>Use browser tools to clear site data (Settings → Storage)</li>
+            </ul>
+            <div style="text-align: center; margin-top: 20px;">
+                <button onclick="window.location.href='manage-templates.html'" 
+                        style="background: #38bdf8; border: none; padding: 10px 20px; border-radius: 8px; color: white; margin-right: 10px; cursor: pointer;">
+                    Manage Templates
+                </button>
+                <button onclick="this.parentElement.parentElement.parentElement.remove()" 
+                        style="background: #666; border: none; padding: 10px 20px; border-radius: 8px; color: white; cursor: pointer;">
+                    Close
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(dialog);
+    
+    dialog.addEventListener('click', (e) => {
+        if (e.target === dialog) dialog.remove();
+    });
 }
 
 // Utility Functions
