@@ -122,16 +122,16 @@ class GitHubStorage {
     // Get all public templates
     async getPublicTemplates() {
         try {
-            // Add cache-busting parameter to prevent browser caching
-            const cacheBuster = `?t=${Date.now()}`;
-            const response = await fetch(
-                `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${this.templatesPath}${cacheBuster}`,
-                {
-                    headers: {
-                        'Accept': 'application/vnd.github.v3+json'
-                    }
-                }
-            );
+            // Use timestamp-based cache busting without query params to avoid CORS
+            const timestamp = Date.now();
+            const baseUrl = `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${this.templatesPath}`;
+            
+            const response = await fetch(baseUrl, {
+                headers: {
+                    'Accept': 'application/vnd.github.v3+json'
+                },
+                cache: 'no-store' // Force fresh fetch without custom headers
+            });
             
             if (!response.ok) {
                 if (response.status === 404) {
@@ -144,10 +144,14 @@ class GitHubStorage {
             const files = await response.json();
             const templates = [];
             
-            // Fetch each template file with cache-busting
+            // Fetch each template file with cache busting
             for (const file of files.filter(f => f.name.endsWith('.json'))) {
                 try {
-                    const templateResponse = await fetch(`${file.download_url}${cacheBuster}`);
+                    // Add timestamp to download URL for cache busting
+                    const downloadUrl = `${file.download_url}?v=${timestamp}`;
+                    const templateResponse = await fetch(downloadUrl, {
+                        cache: 'no-store'
+                    });
                     const template = await templateResponse.json();
                     templates.push(template);
                 } catch (error) {
@@ -165,15 +169,15 @@ class GitHubStorage {
     // Get a specific template by ID with cache-busting
     async getTemplateById(templateId) {
         try {
-            const cacheBuster = `?t=${Date.now()}`;
-            const response = await fetch(
-                `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${this.templatesPath}/template_${templateId}.json${cacheBuster}`,
-                {
-                    headers: {
-                        'Accept': 'application/vnd.github.v3+json'
-                    }
-                }
-            );
+            const timestamp = Date.now();
+            const baseUrl = `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${this.templatesPath}/template_${templateId}.json`;
+            
+            const response = await fetch(baseUrl, {
+                headers: {
+                    'Accept': 'application/vnd.github.v3+json'
+                },
+                cache: 'no-store'
+            });
             
             if (!response.ok) {
                 if (response.status === 404) {
@@ -183,7 +187,10 @@ class GitHubStorage {
             }
             
             const file = await response.json();
-            const templateResponse = await fetch(`${file.download_url}${cacheBuster}`);
+            const downloadUrl = `${file.download_url}?v=${timestamp}`;
+            const templateResponse = await fetch(downloadUrl, {
+                cache: 'no-store'
+            });
             const template = await templateResponse.json();
             
             return template;
@@ -654,18 +661,17 @@ ${isUpdate ? `This is an update to an existing template with new content.
         if (!this.authenticated) return [];
         
         try {
-            // Add cache-busting parameter to prevent browser caching
-            const cacheBuster = `?t=${Date.now()}`;
-            // Get templates that user has created in this repository (if they have access)
-            const response = await fetch(
-                `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${this.templatesPath}${cacheBuster}`,
-                {
-                    headers: {
-                        'Authorization': `token ${this.accessToken}`,
-                        'Accept': 'application/vnd.github.v3+json'
-                    }
-                }
-            );
+            // Use timestamp-based cache busting
+            const timestamp = Date.now();
+            const baseUrl = `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${this.templatesPath}`;
+            
+            const response = await fetch(baseUrl, {
+                headers: {
+                    'Authorization': `token ${this.accessToken}`,
+                    'Accept': 'application/vnd.github.v3+json'
+                },
+                cache: 'no-store'
+            });
             
             if (!response.ok) {
                 return [];
@@ -676,7 +682,10 @@ ${isUpdate ? `This is an update to an existing template with new content.
             
             for (const file of files.filter(f => f.name.endsWith('.json'))) {
                 try {
-                    const templateResponse = await fetch(`${file.download_url}${cacheBuster}`);
+                    const downloadUrl = `${file.download_url}?v=${timestamp}`;
+                    const templateResponse = await fetch(downloadUrl, {
+                        cache: 'no-store'
+                    });
                     const template = await templateResponse.json();
                     
                     // Only include templates created by current user
