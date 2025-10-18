@@ -122,11 +122,15 @@ class GitHubStorage {
     // Get all public templates
     async getPublicTemplates() {
         try {
+            // Add cache-busting parameter to prevent browser caching
+            const cacheBuster = `?t=${Date.now()}`;
             const response = await fetch(
-                `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${this.templatesPath}`,
+                `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${this.templatesPath}${cacheBuster}`,
                 {
                     headers: {
-                        'Accept': 'application/vnd.github.v3+json'
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache'
                     }
                 }
             );
@@ -142,10 +146,15 @@ class GitHubStorage {
             const files = await response.json();
             const templates = [];
             
-            // Fetch each template file
+            // Fetch each template file with cache-busting
             for (const file of files.filter(f => f.name.endsWith('.json'))) {
                 try {
-                    const templateResponse = await fetch(file.download_url);
+                    const templateResponse = await fetch(`${file.download_url}${cacheBuster}`, {
+                        headers: {
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache'
+                        }
+                    });
                     const template = await templateResponse.json();
                     templates.push(template);
                 } catch (error) {
@@ -157,6 +166,44 @@ class GitHubStorage {
         } catch (error) {
             console.error('Error fetching public templates:', error);
             return [];
+        }
+    }
+
+    // Get a specific template by ID with cache-busting
+    async getTemplateById(templateId) {
+        try {
+            const cacheBuster = `?t=${Date.now()}`;
+            const response = await fetch(
+                `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${this.templatesPath}/template_${templateId}.json${cacheBuster}`,
+                {
+                    headers: {
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache'
+                    }
+                }
+            );
+            
+            if (!response.ok) {
+                if (response.status === 404) {
+                    return null; // Template not found
+                }
+                throw new Error(`GitHub API error: ${response.status}`);
+            }
+            
+            const file = await response.json();
+            const templateResponse = await fetch(`${file.download_url}${cacheBuster}`, {
+                headers: {
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache'
+                }
+            });
+            const template = await templateResponse.json();
+            
+            return template;
+        } catch (error) {
+            console.error(`Error fetching template ${templateId}:`, error);
+            return null;
         }
     }
 
@@ -621,13 +668,17 @@ ${isUpdate ? `This is an update to an existing template with new content.
         if (!this.authenticated) return [];
         
         try {
+            // Add cache-busting parameter to prevent browser caching
+            const cacheBuster = `?t=${Date.now()}`;
             // Get templates that user has created in this repository (if they have access)
             const response = await fetch(
-                `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${this.templatesPath}`,
+                `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${this.templatesPath}${cacheBuster}`,
                 {
                     headers: {
                         'Authorization': `token ${this.accessToken}`,
-                        'Accept': 'application/vnd.github.v3+json'
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache'
                     }
                 }
             );
@@ -641,7 +692,12 @@ ${isUpdate ? `This is an update to an existing template with new content.
             
             for (const file of files.filter(f => f.name.endsWith('.json'))) {
                 try {
-                    const templateResponse = await fetch(file.download_url);
+                    const templateResponse = await fetch(`${file.download_url}${cacheBuster}`, {
+                        headers: {
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache'
+                        }
+                    });
                     const template = await templateResponse.json();
                     
                     // Only include templates created by current user

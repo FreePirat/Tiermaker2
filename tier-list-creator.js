@@ -676,10 +676,9 @@ async function loadTemplate() {
             saveBtn.classList.add('update-mode');
         }
     } else if (templateParam && publicTemplate) {
-        // Load public template
+        // Load public template with cache-busting
         try {
-            const publicTemplates = await githubStorage.getPublicTemplates();
-            const template = publicTemplates.find(t => t.id === templateParam);
+            const template = await githubStorage.getTemplateById(templateParam);
             if (template) {
                 if (isEditing && githubStorage.authenticated && 
                     template.creator && template.creator.username === githubStorage.currentUser?.login) {
