@@ -170,7 +170,11 @@ class GitHubStorage {
     async getTemplateById(templateId) {
         try {
             const timestamp = Date.now();
-            const baseUrl = `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${this.templatesPath}/template_${templateId}.json`;
+            // Handle case where templateId might already include "template_" prefix
+            const cleanTemplateId = templateId.startsWith('template_') ? templateId.slice(9) : templateId;
+            const baseUrl = `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/${this.templatesPath}/template_${cleanTemplateId}.json`;
+            
+            console.log(`Fetching template by ID: ${templateId} -> ${baseUrl}`);
             
             const response = await fetch(baseUrl, {
                 headers: {
