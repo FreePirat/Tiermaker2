@@ -259,16 +259,50 @@ class GitHubStorage {
         return fork;
     }
 
-    // Create template file in the user's fork
+    // Create or update template file in the user's fork
     async createFileInFork(filename, templateData, forkOwner) {
         const filePath = `${this.templatesPath}/${filename}`;
         const content = btoa(JSON.stringify(templateData, null, 2));
         
+        let sha = null;
+        let action = 'Add';
+        
+        // Check if file already exists (for updates)
+        try {
+            const existingResponse = await fetch(
+                `${this.apiBase}/repos/${forkOwner}/${this.repo}/contents/${filePath}`,
+                {
+                    headers: {
+                        'Authorization': `token ${this.accessToken}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                }
+            );
+            
+            if (existingResponse.ok) {
+                const existingFile = await existingResponse.json();
+                sha = existingFile.sha;
+                action = 'Update';
+                console.log('Existing template found, updating with SHA:', sha);
+            } else if (existingResponse.status === 404) {
+                console.log('Template not found in fork, creating new file');
+            } else {
+                console.warn('Unexpected response when checking for existing file:', existingResponse.status);
+            }
+        } catch (error) {
+            console.log('Could not check for existing file (will create new):', error.message);
+        }
+        
         const commitData = {
-            message: `Add template: ${templateData.name}`,
+            message: `${action} template: ${templateData.name}`,
             content: content,
             branch: this.branch
         };
+        
+        // Include SHA for updates
+        if (sha) {
+            commitData.sha = sha;
+        }
 
         const response = await fetch(
             `${this.apiBase}/repos/${forkOwner}/${this.repo}/contents/${filePath}`,
@@ -285,37 +319,64 @@ class GitHubStorage {
 
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(`Failed to create template file: ${errorData.message}`);
+            console.error('GitHub API Error:', {
+                status: response.status,
+                statusText: response.statusText,
+                error: errorData,
+                commitData: { ...commitData, content: '[BASE64 CONTENT]' } // Hide content in logs
+            });
+            
+            let errorMessage = `Failed to ${action.toLowerCase()} template file: ${errorData.message}`;
+            
+            if (response.status === 409) {
+                errorMessage = 'File conflict detected. The template may have been modified by another user. Please try again.';
+            } else if (response.status === 422 && errorData.message.includes('sha')) {
+                errorMessage = 'File version mismatch. The template may have been updated by another user. Please reload and try again.';
+            }
+            
+            throw new Error(errorMessage);
         }
 
         const result = await response.json();
-        console.log('Template file created in fork:', result.content.html_url);
+        console.log(`Template file ${action.toLowerCase()}d in fork:`, result.content.html_url);
         return result;
     }
 
     // Create Pull Request from fork to main repository
     async createPullRequest(template, forkOwner) {
-        const prTitle = `Add template: ${template.name}`;
-        const prBody = `## New Template Submission
+        // Check if this is an update to existing template
+        const isUpdate = await this.checkTemplateExists(template.id);
+        const action = isUpdate ? 'Update' : 'Add';
+        
+        const prTitle = `${action} template: ${template.name}`;
+        const prBody = `## Template ${action} Request
 
 **Template Name:** ${template.name}
 **Category:** ${template.category || 'Uncategorized'}
 **Description:** ${template.description || 'No description provided'}
-**Created by:** @${this.currentUser?.login || 'Anonymous'}
+**${isUpdate ? 'Updated' : 'Created'} by:** @${this.currentUser?.login || 'Anonymous'}
 
 ### Template Details
 - **Number of images:** ${template.images?.length || 0}
 - **Number of tiers:** ${template.tiers?.length || 0}
 - **Template ID:** ${template.id}
+- **Action:** ${isUpdate ? 'Update existing template' : 'Add new template'}
 
-This template has been automatically submitted via TierMaker2 and will be auto-merged if validation passes.
+${isUpdate ? `This is an update to an existing template with new content.
+
+### Changes
+- Updated content and metadata
+- Preserves original template ID
+- New timestamp: ${new Date().toISOString()}
+
+` : ''}This template has been automatically submitted via TierMaker2 and will be auto-merged if validation passes.
 
 ### Auto-merge Criteria
 ✅ Valid JSON structure
 ✅ Required fields present (id, name, images, tiers)
 ✅ Template ID matches filename
 ✅ Within size limits (≤1000 images, ≤50 tiers, ≤10MB)
-✅ Only adds new template files
+✅ ${isUpdate ? 'Updates existing template file only' : 'Only adds new template files'}
 
 ---
 *Submitted via TierMaker2 template creator*`;
