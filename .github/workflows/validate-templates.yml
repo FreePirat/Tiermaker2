@@ -161,13 +161,41 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Setup required labels
+      run: |
+        echo "Setting up required repository labels..."
+        
+        # Function to create label if it doesn't exist
+        create_label_if_missing() {
+          local name="$1"
+          local color="$2"
+          local description="$3"
+          
+          if ! gh label view "$name" >/dev/null 2>&1; then
+            echo "Creating label: $name"
+            gh label create "$name" --color "$color" --description "$description"
+          else
+            echo "Label already exists: $name"
+          fi
+        }
+        
+        # Create required labels
+        create_label_if_missing "validation-passed" "28a745" "Template validation completed successfully"
+        create_label_if_missing "validation-failed" "d73a49" "Template validation failed"
+        create_label_if_missing "ready-to-merge" "0366d6" "Template validated and ready for manual merge"
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Merge validated template
       if: env.VALIDATION_PASSED == 'true' && env.SAFE_CHANGES == 'true'
       run: |
         echo "All validations passed. Attempting to merge template..."
         
-        # Add validation labels first
-        gh pr edit ${{ github.event.pull_request.number }} --add-label "validation-passed"
+        # Add validation labels first (with fallback if label doesn't exist)
+        echo "Adding validation label..."
+        if ! gh pr edit ${{ github.event.pull_request.number }} --add-label "validation-passed"; then
+          echo "⚠️ Could not add validation-passed label (label may not exist)"
+        fi
         
         # Try to merge the PR directly with auto-merge
         echo "Attempting automatic merge..."
@@ -190,7 +218,9 @@ jobs:
           
         else
           echo "⚠️ Auto-merge failed. Adding ready-to-merge label..."
-          gh pr edit ${{ github.event.pull_request.number }} --add-label "ready-to-merge"
+          if ! gh pr edit ${{ github.event.pull_request.number }} --add-label "ready-to-merge"; then
+            echo "⚠️ Could not add ready-to-merge label (label may not exist)"
+          fi
           
           gh pr comment ${{ github.event.pull_request.number }} --body "🤖 **Automated validation completed successfully!** ✅
 
@@ -238,7 +268,10 @@ jobs:
         
         gh pr comment ${{ github.event.pull_request.number }} --body "$comment"
         
-        # Add failure label
-        gh pr edit ${{ github.event.pull_request.number }} --add-label "validation-failed"
+        # Add failure label (with fallback if label doesn't exist)
+        echo "Adding validation-failed label..."
+        if ! gh pr edit ${{ github.event.pull_request.number }} --add-label "validation-failed"; then
+          echo "⚠️ Could not add validation-failed label (label may not exist)"
+        fi
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
