@@ -779,6 +779,14 @@
         async function toggleLike(templateId, buttonElement, section) {
             try {
                 console.log('Toggling like for template:', templateId, 'in section:', section);
+
+                if (!githubStorage.authenticated) {
+                    const loginSuccess = await githubStorage.login();
+                    if (!loginSuccess) {
+                        throw new Error('Authentication is required to sync favorites to the repository.');
+                    }
+                    updateNavAuthUI();
+                }
                 
                 // Check if localStorage is available
                 if (!isLocalStorageAvailable()) {
@@ -824,17 +832,21 @@
                 
                 if (isCurrentlyLiked) {
                     // Unlike
+                    const updatedLikes = await githubStorage.unlikeTemplate(templateId);
                     userLikes = userLikes.filter(id => id !== templateId);
-                    templateLikes[templateId] = Math.max(0, (templateLikes[templateId] || 0) - 1);
+                    templateLikes[templateId] = updatedLikes;
                     buttonElement.classList.remove('liked');
-                    buttonElement.innerHTML = `🤍 <span class="like-count">${templateLikes[templateId] || 0}</span>`;
+                    buttonElement.innerHTML = `🤍 <span class="like-count">${updatedLikes}</span>`;
                     console.log('❌ UNLIKE successful. New like count:', templateLikes[templateId]);
                 } else {
                     // Like
-                    userLikes.push(templateId);
-                    templateLikes[templateId] = (templateLikes[templateId] || 0) + 1;
+                    const updatedLikes = await githubStorage.likeTemplate(templateId);
+                    if (!userLikes.includes(templateId)) {
+                        userLikes.push(templateId);
+                    }
+                    templateLikes[templateId] = updatedLikes;
                     buttonElement.classList.add('liked');
-                    buttonElement.innerHTML = `❤️ <span class="like-count">${templateLikes[templateId]}</span>`;
+                    buttonElement.innerHTML = `❤️ <span class="like-count">${updatedLikes}</span>`;
                     console.log('❤️ LIKE successful. New like count:', templateLikes[templateId]);
                 }
                 

@@ -68,6 +68,62 @@
     background-color: #555;
 }
 
+/* Mirror create-template color picker formatting */
+.color-picker {
+    width: 28px;
+    height: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 6px;
+    cursor: pointer;
+    padding: 0;
+    outline: none;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+    opacity: 1;
+    background: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+.color-picker:hover {
+    border-color: rgba(255, 255, 255, 0.7);
+    transform: scale(1.05);
+}
+
+.color-picker::-webkit-color-swatch {
+    border: none;
+    border-radius: 50%;
+}
+
+.color-picker::-moz-color-swatch {
+    border: none;
+    border-radius: 50%;
+}
+
+/* Chromium swatch wrapper reset */
+.color-picker::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.color-picker::-webkit-color-swatch {
+    border: none;
+    border-radius: 50%;
+}
+
+/* Color input swatch cleanup */
+.color-picker[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    overflow: hidden;
+}
+
+.color-picker[type="color"]::-webkit-color-swatch {
+    border: none;
+    border-radius: 50%;
+    position: relative;
+}
+
 /* Templates Grid */
 .templates-container {
     display: grid;

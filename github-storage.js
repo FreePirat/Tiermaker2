@@ -858,22 +858,69 @@ ${isUpdate ? `This is an update to an existing template with new content.
                 const content = JSON.parse(atob(file.content));
                 return content[this.currentUser?.login] || [];
             }
-            
-            return [];
+
+            const allUserLikes = JSON.parse(localStorage.getItem('all_user_likes') || '{}');
+            return allUserLikes[this.currentUser?.login] || [];
         } catch (error) {
             console.error('Error getting user likes:', error);
-            return [];
+            try {
+                const allUserLikes = JSON.parse(localStorage.getItem('all_user_likes') || '{}');
+                return allUserLikes[this.currentUser?.login] || [];
+            } catch (storageError) {
+                console.error('Error reading local user likes fallback:', storageError);
+                return [];
+            }
         }
     }
 
     // Save user's likes
     async saveUserLikes(likes) {
-        if (!this.authenticated) return;
-        
-        // For now, just store locally since we can't write to the repository
-        const allUserLikes = JSON.parse(localStorage.getItem('all_user_likes') || '{}');
-        allUserLikes[this.currentUser?.login] = likes;
-        localStorage.setItem('all_user_likes', JSON.stringify(allUserLikes));
+        if (!this.authenticated) {
+            throw new Error('Authentication required to save likes');
+        }
+
+        const username = this.currentUser?.login;
+        if (!username) {
+            throw new Error('Could not determine current GitHub user');
+        }
+
+        const uniqueLikes = Array.from(new Set((likes || []).filter(Boolean)));
+
+        let allUserLikes = {};
+        try {
+            const response = await fetch(
+                `${this.apiBase}/repos/${this.owner}/${this.repo}/contents/likes/user_likes.json`,
+                {
+                    headers: {
+                        'Authorization': `token ${this.accessToken}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                }
+            );
+
+            if (response.ok) {
+                const file = await response.json();
+                allUserLikes = JSON.parse(atob(file.content));
+            }
+        } catch (fetchError) {
+            console.warn('Could not read remote user likes file, continuing with local cache:', fetchError);
+        }
+
+        allUserLikes[username] = uniqueLikes;
+
+        try {
+            await this.saveFileToGitHub(
+                'likes/user_likes.json',
+                JSON.stringify(allUserLikes, null, 2),
+                `Update favorites for @${username}`
+            );
+        } catch (repoError) {
+            console.warn('Failed to update repository user likes immediately, storing local fallback:', repoError);
+        }
+
+        const localAllUserLikes = JSON.parse(localStorage.getItem('all_user_likes') || '{}');
+        localAllUserLikes[username] = uniqueLikes;
+        localStorage.setItem('all_user_likes', JSON.stringify(localAllUserLikes));
     }
 
     // Get template likes count
@@ -903,10 +950,29 @@ ${isUpdate ? `This is an update to an existing template with new content.
 
     // Save template likes count
     async saveTemplateLikes(templateId, count) {
-        // For now, just store locally since we can't write to the repository
-        const templateLikes = JSON.parse(localStorage.getItem('template_likes') || '{}');
-        templateLikes[templateId] = count;
-        localStorage.setItem('template_likes', JSON.stringify(templateLikes));
+        const safeCount = Math.max(0, Number(count) || 0);
+        const payload = {
+            templateId,
+            count: safeCount,
+            updatedAt: new Date().toISOString(),
+            updatedBy: this.currentUser?.login || null
+        };
+
+        if (this.authenticated) {
+            try {
+                await this.saveFileToGitHub(
+                    `likes/${templateId}_likes.json`,
+                    JSON.stringify(payload, null, 2),
+                    `Update likes for ${templateId}: ${safeCount}`
+                );
+            } catch (repoError) {
+                console.warn('Failed to update repository template likes immediately, storing local fallback:', repoError);
+            }
+        }
+
+        const templateLikes = JSON.parse(localStorage.getItem('template_like_counts') || '{}');
+        templateLikes[templateId] = safeCount;
+        localStorage.setItem('template_like_counts', JSON.stringify(templateLikes));
     }
 
     // Delete a template via Fork + Pull Request workflow
