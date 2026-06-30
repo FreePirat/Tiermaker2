@@ -40,67 +40,21 @@ function getDefaultTierColor(label) {
 
 // Auto-resize tier label text to fit in the available container space with overflow protection
 function autoResizeTierLabel(label) {
-    let text = label.textContent || label.innerText;
-    
-    // Get the actual dimensions of the tier label
-    const labelHeight = label.offsetHeight || 80;
-    const labelWidth = 70; // 80px width - 10px padding = 70px usable width
-    
-    // Calculate height-based multiplier (more height = allow bigger text and more characters)
-    const heightMultiplier = Math.max(1, Math.min(2.5, labelHeight / 80));
-    
-    // Dynamic character limit based on available height
-    const baseCharLimit = 35;
-    const heightBasedCharLimit = Math.floor(baseCharLimit * heightMultiplier);
-    const dynamicCharLimit = Math.min(60, heightBasedCharLimit);
-    
-    // Enforce dynamic character limit
-    if (text.length > dynamicCharLimit) {
-        text = text.substring(0, dynamicCharLimit);
-        label.textContent = text;
-    }
-    
-    // Start with base font size calculation
-    const textLength = text.length;
-    let baseFontSize;
-    
-    if (textLength <= 2) {
-        baseFontSize = 28;
-    } else if (textLength <= 4) {
-        baseFontSize = 24;
-    } else if (textLength <= 6) {
-        baseFontSize = 20;
-    } else if (textLength <= 8) {
-        baseFontSize = 18;
-    } else if (textLength <= 12) {
-        baseFontSize = 16;
-    } else if (textLength <= 16) {
-        baseFontSize = 14;
-    } else if (textLength <= 20) {
-        baseFontSize = 12;
-    } else if (textLength <= 25) {
-        baseFontSize = 11;
-    } else if (textLength <= 35) {
-        baseFontSize = 10;
-    } else if (textLength <= 45) {
-        baseFontSize = 9;
+    // Simple approach: tier rows automatically expand based on content
+    // No aggressive text scaling - just let it wrap naturally
+
+    // Set font size by selected image size
+    if (label.classList.contains('size-large')) {
+        label.style.fontSize = '24px';
+    } else if (label.classList.contains('size-small')) {
+        label.style.fontSize = '16px';
     } else {
-        baseFontSize = 8;
+        label.style.fontSize = '20px';
     }
-    
-    // Apply height multiplier to base font size
-    let fontSize = Math.round(baseFontSize * heightMultiplier);
-    
-    // Apply bounds
-    fontSize = Math.max(6, Math.min(36, fontSize));
-    
-    // Test if text fits at this size and reduce if necessary
-    fontSize = fitTextToContainer(label, text, fontSize, labelWidth, labelHeight);
-    
-    label.style.fontSize = fontSize + 'px';
-    
-    // Store the current dynamic char limit for use in event handlers
-    label.setAttribute('data-char-limit', dynamicCharLimit);
+    label.style.lineHeight = '1.2';
+    label.style.whiteSpace = 'normal';
+    label.style.wordWrap = 'break-word';
+    label.style.overflowWrap = 'break-word';
 }
 
 // Test if text fits in container and reduce font size until it fits
@@ -300,53 +254,11 @@ function setupTierLabelListeners() {
                 showMessage(`Tier label limited to ${currentCharLimit} characters for current size`, 'warning');
                 return;
             }
-            
-            // For very long strings without spaces, start refusing new characters earlier
-            const words = text.split(/\s+/);
-            const longestWord = Math.max(...words.map(word => word.length));
-            if (longestWord > 15 && !e.key.match(/\s/)) {
-                // If we're typing a non-space character and there's already a very long word
-                const selection = window.getSelection();
-                if (selection.rangeCount > 0) {
-                    const range = selection.getRangeAt(0);
-                    const currentWord = getCurrentWord(range);
-                    if (currentWord.length > 15) {
-                        e.preventDefault();
-                        showMessage('Word too long - add a space or hyphen to continue', 'warning');
-                        return;
-                    }
-                }
-            }
         });
         
         // Initial resize
         autoResizeTierLabel(label);
     });
-}
-
-// Helper function to get the current word being typed at cursor position
-function getCurrentWord(range) {
-    const textNode = range.startContainer;
-    if (textNode.nodeType !== Node.TEXT_NODE) return '';
-    
-    const text = textNode.textContent || '';
-    const offset = range.startOffset;
-    
-    // Find word boundaries around the cursor
-    let start = offset;
-    let end = offset;
-    
-    // Move start backward to find word start
-    while (start > 0 && !text[start - 1].match(/\s/)) {
-        start--;
-    }
-    
-    // Move end forward to find word end
-    while (end < text.length && !text[end].match(/\s/)) {
-        end++;
-    }
-    
-    return text.substring(start, end);
 }
 
 // Remove draggable functionality from tier rows
@@ -552,54 +464,18 @@ async function handlePublicSharingChange() {
     }
 }
 
-// Color Picker Functions
 function setupColorPickers() {
-    const colorPickers = document.querySelectorAll('.color-picker');
-    console.log('Setting up', colorPickers.length, 'color pickers');
-    
-    // First, apply eyedropper removal to existing pickers
-    colorPickers.forEach((picker, index) => {
-        console.log('Removing eyedropper from existing picker', index);
+    document.querySelectorAll('.color-picker').forEach(picker => {
         removeEyedropperFromPicker(picker);
-    });
-    
-    // Remove all existing event listeners from all color pickers
-    colorPickers.forEach(picker => {
+
         const newPicker = picker.cloneNode(true);
-        // Apply eyedropper removal to the cloned picker as well
-        removeEyedropperFromPicker(newPicker);
         picker.parentNode.replaceChild(newPicker, picker);
+
+        newPicker.addEventListener('input', handleColorChange);
+        newPicker.addEventListener('change', handleColorChange);
     });
-    
-    // Re-query after replacement
-    const freshColorPickers = document.querySelectorAll('.color-picker');
-    
-    freshColorPickers.forEach((picker, index) => {
-        console.log('Setting up color picker', index, 'with value:', picker.value);
-        
-        // Ensure eyedropper is removed from fresh pickers too
-        removeEyedropperFromPicker(picker);
-        
-        // Add both change and input listeners for better responsiveness
-        picker.addEventListener('change', function(event) {
-            console.log('Color picker CHANGE event fired for picker', index);
-            handleColorChange(event);
-        });
-        
-        picker.addEventListener('input', function(event) {
-            console.log('Color picker INPUT event fired for picker', index);
-            handleColorChange(event);
-        });
-        
-        // Test click listener to ensure picker is responsive
-        picker.addEventListener('click', function() {
-            console.log('Color picker CLICKED:', index, 'current value:', picker.value);
-        });
-        
-        console.log('✓ Color picker', index, 'listeners attached');
-    });
-    
-    console.log('✓ All color pickers setup complete');
+
+    console.log('Basic color pickers initialized:', document.querySelectorAll('.color-picker').length);
 }
 
 function removeEyedropperFromPicker(picker) {
@@ -740,12 +616,21 @@ function loadTemplateData(template, isPublicCopy = false, isEditing = false) {
     if (template.images && template.images.length > 0) {
         loadTemplateImages(template.images);
     }
+    
+    // Ensure tier labels are properly sized after loading template data
+    setTimeout(() => {
+        updateTierLabelSizes();
+        setupColorPickers();
+        setupTierLabelListeners();
+    }, 100);
 }
 
 // Image Upload Handling
 function handleImageUpload(event) {
     const files = event.target.files;
     const imagePool = document.querySelector('.image-pool-container');
+    
+    console.log(`📁 UPLOADING ${files.length} images (NO UPLOAD LIMIT - can upload as many as you want!)`);
     
     for (let file of files) {
         if (file.type.startsWith('image/')) {
@@ -864,16 +749,26 @@ function createImageElement(src, name) {
 }
 
 // Drag and Drop Functions
+function getValidDropTarget(element) {
+    if (!element || typeof element.closest !== 'function') {
+        return null;
+    }
+    return element.closest('.tier-items, .image-pool-container, .pinned-pool-container, .pinned-pool-row');
+}
+
 function allowDrop(e) {
     e.preventDefault();
-    e.currentTarget.classList.add('drag-over');
+    const dropTarget = getValidDropTarget(e.target) || getValidDropTarget(e.currentTarget);
+    if (dropTarget) {
+        dropTarget.classList.add('drag-over');
+    }
 }
 
 function drop(e) {
     e.preventDefault();
     
-    // Get the actual drop target - could be currentTarget or target
-    const dropTarget = e.currentTarget || e.target;
+    // Resolve drop target to the valid container even when hovering child elements
+    const dropTarget = getValidDropTarget(e.target) || getValidDropTarget(e.currentTarget);
     
     // Early safety check - ensure we have a valid drop target
     if (!dropTarget) {
@@ -1050,8 +945,8 @@ function insertAtPosition(container, element, clientX, clientY) {
         return;
     }
     
-    // Find the best position to insert the element
-    let insertBefore = null;
+    // Find closest item first, then apply 60% horizontal threshold rule
+    let closestItem = null;
     let minDistance = Infinity;
     
     for (let item of items) {
@@ -1065,17 +960,26 @@ function insertAtPosition(container, element, clientX, clientY) {
             Math.pow(clientY - itemCenterY, 2)
         );
         
-        // If mouse is to the left of the item center, consider inserting before this item
-        if (clientX < itemCenterX && distance < minDistance) {
+        if (distance < minDistance) {
             minDistance = distance;
-            insertBefore = item;
+            closestItem = item;
         }
     }
-    
-    if (insertBefore) {
-        container.insertBefore(element, insertBefore);
-    } else {
+
+    if (!closestItem) {
         container.appendChild(element);
+        return;
+    }
+
+    const closestRect = closestItem.getBoundingClientRect();
+    const insertAfterThresholdX = closestRect.left + (closestRect.width * 0.6);
+
+    if (clientX <= insertAfterThresholdX) {
+        container.insertBefore(element, closestItem);
+    } else {
+        const closestIndex = items.indexOf(closestItem);
+        const nextItem = items[closestIndex + 1] || null;
+        container.insertBefore(element, nextItem);
     }
 }
 
@@ -1092,10 +996,10 @@ function addTierRow() {
     
     newTier.innerHTML = `
         <div class="tier-label" contenteditable="true" style="background-color: ${defaultColor}">New</div>
+        <div class="tier-items"></div>
         <div class="tier-controls">
             <input type="color" class="color-picker" value="${defaultColor}" title="Change tier color">
         </div>
-        <div class="tier-items"></div>
         <div class="tier-drag-handle" title="Drag to reorder tiers">⋮⋮</div>
     `;
     
@@ -1177,7 +1081,7 @@ function handleTierDragOver(e) {
         row.classList.remove('tier-drop-above', 'tier-drop-below');
     });
     
-    // Determine if we should drop above or below
+    // Only check Y axis - determine if we should drop above or below based on vertical position only
     const rect = targetRow.getBoundingClientRect();
     const midpoint = rect.top + rect.height / 2;
     
@@ -1283,10 +1187,10 @@ function changeTierFormat() {
         
         tierRow.innerHTML = `
             <div class="tier-label" contenteditable="true" style="background-color: ${defaultColor}">${tierLabels[i]}</div>
+            <div class="tier-items"></div>
             <div class="tier-controls">
                 <input type="color" class="color-picker" value="${defaultColor}" title="Change tier color">
             </div>
-            <div class="tier-items"></div>
         `;
         
         // Ensure tier row is NOT draggable
@@ -1669,10 +1573,6 @@ function changeImageSize(size) {
         container.classList.add(sizeClass);
     });
     
-    pinnedCharacters.forEach(character => {
-        character.classList.add(sizeClass);
-    });
-    
     pinnedPoolRows.forEach(row => {
         row.classList.add(sizeClass);
     });
@@ -1714,7 +1614,6 @@ function applySizeClasses(tierItems, tierLabels, tierRows = [], tierItemsContain
     
     pinnedCharacters.forEach(character => {
         character.classList.remove('size-small', 'size-medium', 'size-large');
-        character.classList.add(sizeClass);
     });
 }
 
@@ -1852,16 +1751,23 @@ async function saveTemplate() {
     // Save publicly if requested
     if (sharePublicly) {
         try {
-            showMessage('Submitting template via Pull Request...', 'info');
+            showMessage('Publishing template...', 'info');
             // Set the public flag on the template before saving
             const publicTemplate = { ...currentTemplate, public: true, isPublic: true };
             const result = await githubStorage.saveTemplate(publicTemplate);
             
             if (result && result.success) {
                 const action = isUpdating ? 'updated' : 'saved';
-                showMessage(`Template ${action} locally and submitted as Pull Request! 🎉`, 'success');
+                if (result.directCommit) {
+                    showMessage(`Template ${action} and published immediately! 🎉`, 'success');
+                } else {
+                    showMessage(`Template ${action} locally and submitted as Pull Request! 🎉`, 'success');
+                }
                 if (result.pullRequestUrl) {
                     console.log('Pull Request URL:', result.pullRequestUrl);
+                }
+                if (result.commitUrl) {
+                    console.log('Direct commit URL:', result.commitUrl);
                 }
             } else if (result && result.local) {
                 const action = isUpdating ? 'updated' : 'saved';
@@ -2156,10 +2062,10 @@ function recreateTierStructure(tiers) {
         
         tierRow.innerHTML = `
             <div class="tier-label" contenteditable="true" style="background-color: ${tierColor}">${tier.label}</div>
+            <div class="tier-items"></div>
             <div class="tier-controls">
                 <input type="color" class="color-picker" value="${tierColor}" title="Change tier color">
             </div>
-            <div class="tier-items"></div>
             <div class="tier-drag-handle" title="Drag to reorder tiers">⋮⋮</div>
         `;
         
@@ -2271,43 +2177,34 @@ function loadTemplateImages(images) {
 
 // Add event listeners for drag over effects
 document.addEventListener('dragover', function(e) {
-    const isDropTarget = e.target.classList.contains('tier-items') || 
-                        e.target.classList.contains('image-pool-container') ||
-                        e.target.classList.contains('pinned-pool-container') ||
-                        e.target.classList.contains('pinned-pool-row');
-    
-    if (isDropTarget) {
+    const dropTarget = getValidDropTarget(e.target);
+
+    if (dropTarget) {
         e.preventDefault();
-        e.target.classList.add('drag-over');
+        dropTarget.classList.add('drag-over');
     }
 });
 
 document.addEventListener('dragleave', function(e) {
-    const isDropTarget = e.target.classList.contains('tier-items') || 
-                        e.target.classList.contains('image-pool-container') ||
-                        e.target.classList.contains('pinned-pool-container') ||
-                        e.target.classList.contains('pinned-pool-row');
-    
-    if (isDropTarget) {
-        e.target.classList.remove('drag-over');
+    const dropTarget = getValidDropTarget(e.target);
+
+    if (dropTarget) {
+        dropTarget.classList.remove('drag-over');
     }
 });
 
 document.addEventListener('drop', function(e) {
-    const isDropTarget = e.target.classList.contains('tier-items') || 
-                        e.target.classList.contains('image-pool-container') ||
-                        e.target.classList.contains('pinned-pool-container') ||
-                        e.target.classList.contains('pinned-pool-row');
-    
-    if (isDropTarget) {
+    const dropTarget = getValidDropTarget(e.target);
+
+    if (dropTarget) {
         e.preventDefault();
         e.stopPropagation();
         
         // Create a modified event object where currentTarget is the actual drop target
         const modifiedEvent = {
             ...e,
-            currentTarget: e.target,
-            target: e.target,
+            currentTarget: dropTarget,
+            target: dropTarget,
             preventDefault: () => e.preventDefault(),
             clientX: e.clientX,
             clientY: e.clientY
@@ -2366,15 +2263,14 @@ function populatePinnedPool() {
     
     // Only proceed if there are actual images
     if (images.length === 0) {
+        console.warn('📌 No images to pin');
         return;
     }
     
-    // Distribute images across two rows
-    const imagesPerRow = Math.ceil(images.length / 2);
+    console.log(`📌 PINNED POOL: Populating with ${images.length} images`);
     
     images.forEach((img, index) => {
-        const rowIndex = Math.floor(index / imagesPerRow);
-        const targetRow = pinnedRows[rowIndex];
+        const targetRow = pinnedRows[0];
         
         if (targetRow) {
             // Create pinned version using the actual image
@@ -2382,6 +2278,8 @@ function populatePinnedPool() {
             targetRow.appendChild(pinnedImg);
         }
     });
+
+    console.log(`✅ PINNED POOL: ${images.length} images rendered in single wrapping row`);
     
     // Apply current size classes to pinned pool rows and characters
     const selectedRadio = document.querySelector('input[name="imageSize"]:checked');
@@ -2393,11 +2291,10 @@ function populatePinnedPool() {
         row.classList.add(sizeClass);
     });
     
-    // Apply size classes to all pinned characters
+    // Keep pinned characters strict size regardless of image size mode
     const allPinnedCharacters = document.querySelectorAll('.pinned-character');
     allPinnedCharacters.forEach(character => {
         character.classList.remove('size-small', 'size-medium', 'size-large');
-        character.classList.add(sizeClass);
     });
 }
 
@@ -2414,12 +2311,6 @@ function createPinnedCharacter(originalImg) {
     
     // Store the source for drag operations
     pinnedChar.dataset.src = originalImg.src;
-    
-    // Apply current size class to the pinned character
-    const selectedRadio = document.querySelector('input[name="imageSize"]:checked');
-    const currentSize = selectedRadio ? selectedRadio.value : 'medium';
-    const sizeClass = `size-${currentSize}`;
-    pinnedChar.classList.add(sizeClass);
     
     // Add drag events
     pinnedChar.addEventListener('dragstart', function(e) {

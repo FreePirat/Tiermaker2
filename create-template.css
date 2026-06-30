@@ -268,8 +268,9 @@
 .tier-row {
     display: flex;
     min-height: 96px;
+    height: auto;
     margin-bottom: 8px;
-    background-color: #1a1a1a;
+    background-color: #404040;
     border-radius: 6px;
     overflow: visible; /* Changed from hidden to visible */
     position: relative;
@@ -277,6 +278,7 @@
     border: 2px solid transparent;
     /* Ensure proper vertical alignment */
     align-items: stretch;
+    background-clip: padding-box;
 }
 
 .tier-row:hover {
@@ -286,14 +288,15 @@
 }
 
 .tier-label {
-    width: 80px;
+    width: 96px;
     min-height: 80px;
+    height: auto;
     background-color: #ff6b9d;
     color: white;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 24px;
+    font-size: 20px;
     font-weight: bold;
     cursor: text;
     outline: none;
@@ -308,20 +311,17 @@
         2px 0 0 #000,
         0 -2px 0 #000,
         0 2px 0 #000;
-    /* Robust text containment - prevent layout breaking */
-    overflow-wrap: anywhere; /* Break anywhere if needed to prevent overflow */
-    word-break: break-word; /* Break long words that don't fit */
-    hyphens: auto; /* Add hyphens for broken words */
-    white-space: normal; /* Allow normal text wrapping */
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    hyphens: auto;
+    white-space: normal;
     text-align: center;
-    padding: 5px;
+    padding: 8px;
     box-sizing: border-box;
-    width: 96px; /* Fixed width to prevent horizontal expansion */
-    max-width: 96px; /* Enforce maximum width */
-    min-width: 96px; /* Enforce minimum width */
-    overflow: hidden; /* Hide any overflow that might occur */
-    transition: width 0.3s ease, min-width 0.3s ease, max-width 0.3s ease, min-height 0.3s ease;
-    /* Stretch to fill the full height of the tier row */
+    max-width: 96px;
+    min-width: 96px;
+    overflow: hidden;
+    transition: all 0.3s ease;
     align-self: stretch;
 }
 
@@ -330,18 +330,21 @@
     width: 80px;
     min-width: 80px;
     max-width: 80px;
+    font-size: 16px;
 }
 
 .tier-label.size-medium {
     width: 96px;
     min-width: 96px;
     max-width: 96px;
+    font-size: 20px;
 }
 
 .tier-label.size-large {
     width: 112px;
     min-width: 112px;
     max-width: 112px;
+    font-size: 24px;
 }
 
 /* Tier Row Size Variants */
@@ -375,25 +378,25 @@
 }
 
 .tier-controls {
-    position: absolute;
-    top: 5px;
-    right: 35px;
-    z-index: 10;
     display: flex;
-    gap: 5px;
     align-items: center;
+    justify-content: center;
+    width: 44px;
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
 }
 
 .color-picker {
-    width: 24px;
-    height: 24px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 6px;
     cursor: pointer;
     padding: 0;
     outline: none;
-    transition: all 0.2s ease;
-    opacity: 0.7;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+    opacity: 1;
     background: none;
     -webkit-appearance: none;
     -moz-appearance: none;
@@ -401,9 +404,8 @@
 }
 
 .color-picker:hover {
-    opacity: 1;
-    border-color: rgba(255, 255, 255, 0.6);
-    transform: scale(1.1);
+    border-color: rgba(255, 255, 255, 0.7);
+    transform: scale(1.05);
 }
 .color-picker::-webkit-color-swatch {
     border: none;
@@ -450,10 +452,13 @@
     background-color: #404040;
     transition: background-color 0.2s ease;
     box-sizing: border-box;
-    /* Explicitly allow height to grow based on content */
-    height: fit-content;
+    /* Fill full row height so background remains consistently gray */
+    min-height: 100%;
+    align-self: stretch;
     /* Ensure proper wrapping */
     overflow: visible;
+    border-left: 1px solid #4a4a4a;
+    border-right: 1px solid #4a4a4a;
 }
 
 .tier-items.drag-over {
@@ -1194,15 +1199,20 @@
 /* Pinned Character Pool Styles */
 .pinned-pool {
     position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
+    bottom: 8px;
+    left: 8px;
+    right: 8px;
     background: linear-gradient(135deg, #2c1810, #1a0f08);
     border-top: 3px solid #ff6b9d;
     box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.3);
     z-index: 1000;
-    max-height: 200px;
+    max-height: 164px;
     transition: transform 0.3s ease;
+    width: auto;
+    display: flex;
+    flex-direction: column;
+    border-radius: 8px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .pinned-pool.hidden {
@@ -1243,30 +1253,35 @@
 
 .pinned-pool-container {
     padding: 8px;
-    max-height: 140px;
+    max-height: 116px;
     overflow-y: auto;
+    width: 100%;
+    display: block;
 }
 
 .pinned-pool-row {
     display: flex;
     gap: 6px;
-    margin-bottom: 6px;
-    min-height: 80px;
+    margin-bottom: 0;
+    min-height: 100px;
     flex-wrap: wrap;
     align-content: flex-start;
+    width: 100%;
+    justify-content: flex-start;
+    box-sizing: border-box;
 }
 
 /* Pinned Pool Row Size Variants */
 .pinned-pool-row.size-small {
-    min-height: 64px;
+    min-height: 100px;
 }
 
 .pinned-pool-row.size-medium {
-    min-height: 80px;
+    min-height: 100px;
 }
 
 .pinned-pool-row.size-large {
-    min-height: 96px;
+    min-height: 100px;
 }
 
 .pinned-pool-row:last-child {
@@ -1274,8 +1289,8 @@
 }
 
 .pinned-character {
-    width: 80px;
-    height: 80px;
+    width: 100px;
+    height: 100px;
     border-radius: 8px;
     cursor: grab;
     transition: all 0.2s ease;
@@ -1300,27 +1315,27 @@
 .pinned-character img {
     width: 100%;
     height: 100%;
-    object-fit: contain; /* Changed from cover to contain to preserve transparency */
+    object-fit: contain;
     border-radius: 6px;
     pointer-events: none;
     display: block;
-    background: transparent; /* Ensure transparent background */
+    background: transparent;
 }
 
 /* Pinned Character Size Variants */
 .pinned-character.size-small {
-    width: 64px;
-    height: 64px;
+    width: 100px;
+    height: 100px;
 }
 
 .pinned-character.size-medium {
-    width: 80px;
-    height: 80px;
+    width: 100px;
+    height: 100px;
 }
 
 .pinned-character.size-large {
-    width: 96px;
-    height: 96px;
+    width: 100px;
+    height: 100px;
 }
 
 /* Pin button styling */
@@ -1336,26 +1351,27 @@
 
 /* Add padding to body when pinned pool is visible */
 body.pinned-pool-active {
-    padding-bottom: 200px;
+    padding-bottom: 220px;
+    overflow-x: hidden;
 }
 
 /* Responsive pinned pool */
 @media (max-width: 768px) {
     .pinned-pool {
-        max-height: 160px;
+        max-height: 172px;
     }
     
     .pinned-pool-container {
-        max-height: 100px;
+        max-height: 116px;
     }
     
     .pinned-character {
-        width: 50px;
-        height: 50px;
+        width: 92px;
+        height: 92px;
     }
     
     body.pinned-pool-active {
-        padding-bottom: 160px;
+        padding-bottom: 210px;
     }
     
     /* Additional mobile improvements for pinned pool */

@@ -850,18 +850,7 @@ a:focus {
 }
 
 .template-item.recent::after {
-    content: "🕒";
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    background: rgba(0, 0, 0, 0.7);
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
+    content: none;
 }
 
 @media (max-width: 768px) {
@@ -882,16 +871,5 @@ a:focus {
 }
 
 .template-item.recent::after {
-    content: "🕒";
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    background: rgba(0, 0, 0, 0.7);
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
+    content: none;
 }

@@ -12,6 +12,7 @@ class GitHubStorage {
         this.accessToken = null;
         this.authenticated = false;
         this.currentUser = null;
+        this.repoWriteAccess = null;
     }
 
     // Initialize GitHub authentication
@@ -23,6 +24,7 @@ class GitHubStorage {
             this.authenticated = await this.validateToken();
             if (this.authenticated) {
                 this.currentUser = await this.getCurrentUser();
+                this.repoWriteAccess = null;
             }
         }
         return this.authenticated;
@@ -80,6 +82,7 @@ class GitHubStorage {
                 localStorage.setItem('github_token', token);
                 this.authenticated = true;
                 this.currentUser = await this.getCurrentUser();
+                this.repoWriteAccess = null;
                 console.log('Authentication successful - templates will be saved as GitHub Gists');
                 return true;
             } else {
@@ -117,6 +120,36 @@ class GitHubStorage {
         this.accessToken = null;
         this.authenticated = false;
         this.currentUser = null;
+        this.repoWriteAccess = null;
+    }
+
+    // Check whether authenticated user can push directly to repository
+    async hasRepoWriteAccess() {
+        if (!this.authenticated || !this.accessToken) return false;
+        if (typeof this.repoWriteAccess === 'boolean') return this.repoWriteAccess;
+
+        try {
+            const response = await fetch(`${this.apiBase}/repos/${this.owner}/${this.repo}`, {
+                headers: {
+                    'Authorization': `token ${this.accessToken}`,
+                    'Accept': 'application/vnd.github.v3+json'
+                }
+            });
+
+            if (!response.ok) {
+                this.repoWriteAccess = false;
+                return false;
+            }
+
+            const repoInfo = await response.json();
+            const permissions = repoInfo.permissions || {};
+            this.repoWriteAccess = !!(permissions.push || permissions.maintain || permissions.admin);
+            return this.repoWriteAccess;
+        } catch (error) {
+            console.warn('Could not verify repository write access:', error);
+            this.repoWriteAccess = false;
+            return false;
+        }
     }
 
     // Get all public templates
@@ -213,13 +246,57 @@ class GitHubStorage {
             }
         }
 
-        // For public templates, create a fork and submit PR
+        // For public templates, publish directly when possible; otherwise fallback to PR
         if (template.public || template.isPublic) {
+            const canDirectPublish = await this.hasRepoWriteAccess();
+
+            if (canDirectPublish) {
+                try {
+                    return await this.saveTemplateDirect(template);
+                } catch (directError) {
+                    console.warn('Direct publish failed, falling back to PR workflow:', directError);
+                }
+            }
+
             return await this.saveTemplateViaPR(template);
         }
 
         // For private templates, keep local only
         return { success: true, local: true };
+    }
+
+    // Save template directly to main repository (for collaborators/maintainers)
+    async saveTemplateDirect(template) {
+        const exists = await this.checkTemplateExists(template.id);
+        const action = exists ? 'Update' : 'Publish';
+        const filename = `${template.id}.json`;
+        const path = `${this.templatesPath}/${filename}`;
+
+        const templateData = {
+            ...template,
+            createdAt: template.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            public: true,
+            isPublic: true,
+            creator: this.currentUser ? {
+                username: this.currentUser.login,
+                avatarUrl: this.currentUser.avatar_url,
+                profileUrl: this.currentUser.html_url
+            } : null
+        };
+
+        const result = await this.saveFileToGitHub(
+            path,
+            JSON.stringify(templateData, null, 2),
+            `${action} template: ${templateData.name}`
+        );
+
+        return {
+            success: true,
+            directCommit: true,
+            commitUrl: result?.commit?.html_url || null,
+            message: 'Template published immediately and is now visible publicly.'
+        };
     }
 
     // Save template via Fork + Pull Request workflow

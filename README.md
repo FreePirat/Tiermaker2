@@ -24,6 +24,32 @@ To enable public template sharing, you'll need to create a GitHub Personal Acces
 5. Click "Generate token"
 6. **Copy the token** 
 
+## ⚡ Fully Automatic Public Publishing
+
+Public templates can now publish automatically without manual commits from you:
+
+- If the publisher has write access to `FreePirat/Tiermaker2`, the template is committed directly to `main` immediately.
+- If they do not have write access, a PR is created automatically and GitHub Actions auto-merges template-only PRs.
+
+Workflow file: `.github/workflows/auto-publish-and-email.yml`
+
+## 📧 Email Notification on New Publish
+
+When any `templates/*.json` file is pushed to `main`, GitHub Actions sends an email notification.
+
+Set these repository secrets in **Settings → Secrets and variables → Actions**:
+
+- `SMTP_HOST` (example: `smtp.gmail.com`)
+- `SMTP_PORT` (example: `587`)
+- `SMTP_USERNAME` (sender email address)
+- `SMTP_PASSWORD` (app password / SMTP password)
+- `EMAIL_TO` (set to `jakennik01@gmail.com`)
+
+Notes:
+
+- For Gmail, use an App Password (not your normal account password).
+- If secrets are missing, publish still works, but email step fails until configured.
+
 ## 🎮 How to Use
 
 ### Creating Templates

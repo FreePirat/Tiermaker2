@@ -1,0 +1,114 @@
+name: Auto publish templates + email
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+    paths:
+      - 'templates/*.json'
+  push:
+    branches: [main]
+    paths:
+      - 'templates/*.json'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge-template-pr:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR changed template files only
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+              per_page: 100
+            });
+
+            if (!files.length) {
+              core.setFailed('No files changed in PR.');
+              return;
+            }
+
+            const allowed = files.every(f => /^templates\/.+\.json$/.test(f.filename));
+            if (!allowed) {
+              core.setFailed('PR contains non-template file changes. Auto-merge blocked.');
+              return;
+            }
+
+      - name: Add auto-merge label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              labels: ['template-submission', 'auto-merged']
+            }).catch(() => {});
+
+      - name: Merge PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            await github.rest.pulls.merge({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+              merge_method: 'squash'
+            });
+
+  email-on-template-publish:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build email payload
+        id: payload
+        run: |
+          echo "subject=TierMaker2: New template published" >> $GITHUB_OUTPUT
+          echo "body=Repository: ${{ github.repository }}%0ACommit: https://github.com/${{ github.repository }}/commit/${{ github.sha }}%0AActor: ${{ github.actor }}%0AChanged template files were published to main." >> $GITHUB_OUTPUT
+
+      - name: Send email notification
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: |
+          python - << 'PY'
+          import os, smtplib
+          from email.mime.text import MIMEText
+
+          host = os.environ.get('SMTP_HOST')
+          port = int(os.environ.get('SMTP_PORT', '587'))
+          user = os.environ.get('SMTP_USERNAME')
+          pwd = os.environ.get('SMTP_PASSWORD')
+          to_addr = os.environ.get('EMAIL_TO', 'jakennik01@gmail.com')
+
+          if not all([host, user, pwd]):
+              raise SystemExit('Missing SMTP secrets. Set SMTP_HOST/SMTP_USERNAME/SMTP_PASSWORD (and optionally SMTP_PORT/EMAIL_TO).')
+
+          subject = 'TierMaker2: New template published'
+          body = f"A new template was published.\n\nRepo: {os.environ.get('GITHUB_REPOSITORY')}\nCommit: https://github.com/{os.environ.get('GITHUB_REPOSITORY')}/commit/{os.environ.get('GITHUB_SHA')}\nActor: {os.environ.get('GITHUB_ACTOR')}"
+
+          msg = MIMEText(body)
+          msg['Subject'] = subject
+          msg['From'] = user
+          msg['To'] = to_addr
+
+          with smtplib.SMTP(host, port) as s:
+              s.starttls()
+              s.login(user, pwd)
+              s.sendmail(user, [to_addr], msg.as_string())
+          print('Email sent.')
+          PY

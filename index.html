@@ -477,11 +477,76 @@
                 userLikes = [];
             }
         }
+        
+        // Load likes for templates from localStorage
+        async function loadLikesForTemplates(templates) {
+            try {
+                if (!isLocalStorageAvailable()) {
+                    console.warn('localStorage not available for loading likes');
+                    return;
+                }
+                
+                let templateLikes = {};
+                try {
+                    const storedTemplateLikes = localStorage.getItem('template_like_counts');
+                    if (storedTemplateLikes) {
+                        const parsedTemplateLikes = JSON.parse(storedTemplateLikes);
+                        templateLikes = (typeof parsedTemplateLikes === 'object' && parsedTemplateLikes !== null) ? parsedTemplateLikes : {};
+                    }
+                } catch (parseError) {
+                    console.error('Error parsing template likes:', parseError);
+                    templateLikes = {};
+                }
+                
+                // Apply like counts to templates
+                templates.forEach(template => {
+                    if (template.id in templateLikes) {
+                        template.likes = templateLikes[template.id];
+                    } else {
+                        template.likes = template.likes || 0;
+                    }
+                });
+                
+                console.log('Loaded likes for templates:', templates.map(t => ({ id: t.id, likes: t.likes })));
+            } catch (error) {
+                console.error('Error in loadLikesForTemplates:', error);
+            }
+        }
 
         async function loadMostVotedTemplates() {
             try {
-                // Get all public templates
-                const allTemplates = await githubStorage.getPublicTemplates();
+                // Get templates from public source and merge with local templates for local testing
+                let allTemplates = [];
+                try {
+                    allTemplates = await githubStorage.getPublicTemplates();
+                } catch (publicError) {
+                    console.warn('Public template fetch failed, continuing with local templates:', publicError);
+                    allTemplates = [];
+                }
+
+                let localTemplates = [];
+                try {
+                    const localTemplatesRaw = localStorage.getItem('tierTemplates');
+                    const parsedLocalTemplates = localTemplatesRaw ? JSON.parse(localTemplatesRaw) : [];
+                    localTemplates = Array.isArray(parsedLocalTemplates) ? parsedLocalTemplates : [];
+                } catch (localError) {
+                    console.error('Failed reading local templates:', localError);
+                    localTemplates = [];
+                }
+
+                const templateMap = new Map();
+                allTemplates.forEach(template => {
+                    if (template && template.id) {
+                        templateMap.set(template.id, template);
+                    }
+                });
+                localTemplates.forEach(template => {
+                    if (template && template.id) {
+                        templateMap.set(template.id, template);
+                    }
+                });
+                allTemplates = Array.from(templateMap.values());
+                console.log('Most Voted template pool size (public + local):', allTemplates.length);
                 
                 // Load likes for all templates
                 await loadLikesForTemplates(allTemplates);
@@ -492,6 +557,7 @@
                     .sort((a, b) => (b.likes || 0) - (a.likes || 0))
                     .slice(0, 12); // Show top 12 most liked
                 
+                console.log('✅ MOST VOTED TEMPLATES LOADED:', mostVoted.length, 'templates');
                 console.log('Most voted templates:', mostVoted.map(t => ({ name: t.name, likes: t.likes })));
                 
                 // Replace static templates with dynamic most voted
@@ -662,25 +728,29 @@
                 `<div class="template-creator">by @${template.creator.username}</div>` : 
                 '<div class="template-creator">Anonymous</div>';
             
-            // Get the current user likes from localStorage to ensure it's up to date
+            // ALWAYS load fresh likes from localStorage to ensure accuracy
             let currentUserLikes = [];
+            let templateLikes = {};
             try {
                 if (isLocalStorageAvailable()) {
-                    const storedLikes = localStorage.getItem('template_likes');
-                    if (storedLikes) {
-                        const parsedLikes = JSON.parse(storedLikes);
-                        // Ensure it's an array
-                        currentUserLikes = Array.isArray(parsedLikes) ? parsedLikes : [];
+                    const storedUserLikes = localStorage.getItem('template_likes');
+                    if (storedUserLikes) {
+                        const parsedUserLikes = JSON.parse(storedUserLikes);
+                        currentUserLikes = Array.isArray(parsedUserLikes) ? parsedUserLikes : [];
+                    }
+                    
+                    const storedTemplateLikes = localStorage.getItem('template_like_counts');
+                    if (storedTemplateLikes) {
+                        const parsedTemplateLikes = JSON.parse(storedTemplateLikes);
+                        templateLikes = (typeof parsedTemplateLikes === 'object' && parsedTemplateLikes !== null) ? parsedTemplateLikes : {};
                     }
                 }
             } catch (error) {
-                console.error('Error loading user likes in createTemplateElement:', error);
-                // Fallback to global userLikes if it exists and is an array
-                currentUserLikes = (window.userLikes && Array.isArray(window.userLikes)) ? window.userLikes : [];
+                console.error('Error loading likes in createTemplateElement:', error);
             }
             
             const isLiked = currentUserLikes.includes(template.id);
-            const likesCount = template.likes || 0;
+            const likesCount = templateLikes[template.id] || template.likes || 0;
             
             templateItem.innerHTML = `
                 <div class="template-image">
@@ -747,20 +817,25 @@
                 const isCurrentlyLiked = userLikes.includes(templateId);
                 console.log('Is currently liked:', isCurrentlyLiked);
                 
+                // Ensure the like count exists in templateLikes
+                if (!(templateId in templateLikes)) {
+                    templateLikes[templateId] = 0;
+                }
+                
                 if (isCurrentlyLiked) {
                     // Unlike
                     userLikes = userLikes.filter(id => id !== templateId);
                     templateLikes[templateId] = Math.max(0, (templateLikes[templateId] || 0) - 1);
                     buttonElement.classList.remove('liked');
                     buttonElement.innerHTML = `🤍 <span class="like-count">${templateLikes[templateId] || 0}</span>`;
-                    console.log('Unliked template. New like count:', templateLikes[templateId]);
+                    console.log('❌ UNLIKE successful. New like count:', templateLikes[templateId]);
                 } else {
                     // Like
                     userLikes.push(templateId);
                     templateLikes[templateId] = (templateLikes[templateId] || 0) + 1;
                     buttonElement.classList.add('liked');
                     buttonElement.innerHTML = `❤️ <span class="like-count">${templateLikes[templateId]}</span>`;
-                    console.log('Liked template. New like count:', templateLikes[templateId]);
+                    console.log('❤️ LIKE successful. New like count:', templateLikes[templateId]);
                 }
                 
                 // Save to localStorage
@@ -797,6 +872,13 @@
                 }
                 
                 console.log('Like toggle completed successfully');
+
+                // Refresh Most Voted immediately so local testing reflects new counts
+                try {
+                    await loadMostVotedTemplates();
+                } catch (refreshError) {
+                    console.error('Failed to refresh Most Voted after like toggle:', refreshError);
+                }
                 
             } catch (error) {
                 console.error('Error toggling like:', error);
