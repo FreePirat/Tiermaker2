@@ -395,7 +395,16 @@ function importTemplates(event) {
     const reader = new FileReader();
     reader.onload = async function(e) {
         try {
-            const parsedData = JSON.parse(e.target.result);
+            const rawText = typeof e.target.result === 'string'
+                ? e.target.result.replace(/^\uFEFF/, '').trim()
+                : '';
+
+            let parsedData = JSON.parse(rawText);
+
+            // Some file sources provide JSON as a quoted JSON string.
+            if (typeof parsedData === 'string') {
+                parsedData = JSON.parse(parsedData);
+            }
 
             // Accept either a single exported template object or an array of templates.
             let importedTemplates;
@@ -404,6 +413,12 @@ function importTemplates(event) {
             } else if (parsedData && typeof parsedData === 'object') {
                 if (Array.isArray(parsedData.templates)) {
                     importedTemplates = parsedData.templates;
+                } else if (parsedData.template && typeof parsedData.template === 'object') {
+                    importedTemplates = [parsedData.template];
+                } else if (Array.isArray(parsedData.data)) {
+                    importedTemplates = parsedData.data;
+                } else if (parsedData.data && typeof parsedData.data === 'object') {
+                    importedTemplates = [parsedData.data];
                 } else {
                     importedTemplates = [parsedData];
                 }

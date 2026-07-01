@@ -31,6 +31,26 @@ class GitHubStorage {
         return btoa(unescape(encodeURIComponent(text)));
     }
 
+    async retryWithBackoff(operation, retries = 4, baseDelayMs = 1000) {
+        let lastError = null;
+
+        for (let attempt = 0; attempt <= retries; attempt++) {
+            try {
+                return await operation(attempt);
+            } catch (error) {
+                lastError = error;
+                if (attempt === retries) {
+                    break;
+                }
+
+                const delay = baseDelayMs * Math.pow(2, attempt);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+
+        throw lastError;
+    }
+
     // Initialize GitHub authentication
     async initAuth() {
         // Check if user has stored auth token
@@ -339,11 +359,28 @@ class GitHubStorage {
                 } : null
             };
             
-            await this.createFileInFork(filename, templateData, fork.owner.login);
+            await this.retryWithBackoff(
+                () => this.createFileInFork(filename, templateData, fork.owner.login),
+                3,
+                1200
+            );
             
             // Step 3: Create Pull Request
             console.log('Step 3: Creating Pull Request...');
-            const pr = await this.createPullRequest(template, fork.owner.login);
+            const pr = await this.retryWithBackoff(
+                () => this.createPullRequest(template, fork.owner.login),
+                2,
+                1200
+            );
+
+            if (pr && pr.noChanges) {
+                return {
+                    success: true,
+                    pullRequestUrl: null,
+                    alreadyUpToDate: true,
+                    message: 'Template is already up to date publicly.'
+                };
+            }
             
             return {
                 success: true,
@@ -414,7 +451,7 @@ class GitHubStorage {
         throw new Error(`Failed to create fork: ${errorData.message}`);
     }
 
-    async waitForForkReady(forkOwner, maxAttempts = 10, delayMs = 1500) {
+    async waitForForkReady(forkOwner, maxAttempts = 30, delayMs = 1500) {
         if (!forkOwner) {
             return;
         }
@@ -680,7 +717,7 @@ ${isUpdate ? `This is an update to an existing template with new content.
                     const validationErrors = errorData.errors.map(err => `${err.field}: ${err.message || err.code}`).join(', ');
                     errorMessage = `Validation Failed: ${validationErrors}`;
                 } else if (errorData.message.includes('No commits between')) {
-                    errorMessage = 'No changes detected. The template may already exist in the repository.';
+                    return { noChanges: true, html_url: null };
                 } else if (errorData.message.includes('head sha')) {
                     errorMessage = 'Fork synchronization issue. Please wait a moment and try again.';
                 } else {

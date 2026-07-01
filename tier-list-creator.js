@@ -1897,7 +1897,8 @@ async function saveTemplate() {
             const alreadyPublished =
                 errorText.includes('no changes detected') ||
                 errorText.includes('already exists') ||
-                errorText.includes('already up to date');
+                errorText.includes('already up to date') ||
+                errorText.includes('already up to date publicly');
 
             if (alreadyPublished) {
                 currentTemplate.public = true;
@@ -1922,7 +1923,8 @@ async function saveTemplate() {
                     await saveTemplatesWithOptimization(templates);
                 }
 
-                showMessage(`Template ${action} locally. GitHub publish request failed.`, 'warning');
+                const shortError = (error && error.message) ? String(error.message).trim() : 'Unknown GitHub error';
+                showMessage(`Template ${action} locally. GitHub publish failed: ${shortError}`, 'warning');
             }
 
             console.error('Public submission error details:', error);
