@@ -9,6 +9,7 @@
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="stylesheet" href="styles.css">
     <script src="github-storage.js?v=3"></script>
+    <script src="storage-utils.js?v=1"></script>
     <script src="https://platform.linkedin.com/badges/js/profile.js" async defer type="text/javascript"></script>
     <style>
         .upload-card {
@@ -526,9 +527,14 @@
 
                 let localTemplates = [];
                 try {
-                    const localTemplatesRaw = localStorage.getItem('tierTemplates');
-                    const parsedLocalTemplates = localTemplatesRaw ? JSON.parse(localTemplatesRaw) : [];
-                    localTemplates = Array.isArray(parsedLocalTemplates) ? parsedLocalTemplates : [];
+                    if (window.TemplateStorage && typeof window.TemplateStorage.loadTemplates === 'function') {
+                        const loadedTemplates = await window.TemplateStorage.loadTemplates();
+                        localTemplates = Array.isArray(loadedTemplates) ? loadedTemplates : [];
+                    } else {
+                        const localTemplatesRaw = localStorage.getItem('tierTemplates');
+                        const parsedLocalTemplates = localTemplatesRaw ? JSON.parse(localTemplatesRaw) : [];
+                        localTemplates = Array.isArray(parsedLocalTemplates) ? parsedLocalTemplates : [];
+                    }
                 } catch (localError) {
                     console.error('Failed reading local templates:', localError);
                     localTemplates = [];
