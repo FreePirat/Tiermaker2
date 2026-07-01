@@ -153,22 +153,24 @@ function createTemplateCard(template) {
                     </div>
                 </div>
             </div>
-            <div class="template-preview">
-                ${previewTiers.map(tier => `
-                    <div class="tier-preview">
-                        <div class="tier-label-preview">${tier.label}</div>
-                        <div class="tier-items-preview">
-                            ${tier.items.slice(0, 8).map(item => `
-                                <div class="tier-item-preview">
-                                    <img src="${item.src}" alt="${item.name}">
-                                </div>
-                            `).join('')}
-                            ${tier.items.length > 8 ? `<span style="color: #aaa; font-size: 10px; margin-left: 5px;">+${tier.items.length - 8}</span>` : ''}
+            ${template.isPublic ? `
+                <div class="template-preview">
+                    ${previewTiers.map(tier => `
+                        <div class="tier-preview">
+                            <div class="tier-label-preview">${tier.label}</div>
+                            <div class="tier-items-preview">
+                                ${tier.items.slice(0, 8).map(item => `
+                                    <div class="tier-item-preview">
+                                        <img src="${item.src}" alt="${item.name}">
+                                    </div>
+                                `).join('')}
+                                ${tier.items.length > 8 ? `<span style="color: #aaa; font-size: 10px; margin-left: 5px;">+${tier.items.length - 8}</span>` : ''}
+                            </div>
                         </div>
-                    </div>
-                `).join('')}
-                ${template.tiers.length > 5 ? `<div style="color: #aaa; font-size: 12px; text-align: center; margin-top: 5px;">+${template.tiers.length - 5} more tiers</div>` : ''}
-            </div>
+                    `).join('')}
+                    ${template.tiers.length > 5 ? `<div style="color: #aaa; font-size: 12px; text-align: center; margin-top: 5px;">+${template.tiers.length - 5} more tiers</div>` : ''}
+                </div>
+            ` : ''}
             
             <div class="template-info">
                 <div class="template-meta">
@@ -177,9 +179,12 @@ function createTemplateCard(template) {
                 </div>
                 
                 <div class="template-actions">
-                    <a href="create-template.html?${template.isPublic ? `template=${template.id}&public=true&edit=true` : `edit=${template.id}`}" class="action-btn edit-btn">
+                    <a href="create-template.html?edit=${encodeURIComponent(template.id)}${template.isPublic ? '&public=true' : ''}" class="action-btn edit-btn">
                         ✏️ Update Template
                     </a>
+                    <button class="action-btn duplicate-btn" onclick="exportTemplate('${template.id}')">
+                        📤 Export JSON
+                    </button>
                     <button class="action-btn duplicate-btn" onclick="duplicateTemplate('${template.id}')">
                         📋 Duplicate
                     </button>
@@ -313,6 +318,31 @@ function exportTemplates() {
     link.click();
     
     showMessage('Templates exported successfully!', 'success');
+}
+
+function exportTemplate(templateId) {
+    const template = templates.find(t => t.id === templateId);
+    if (!template) {
+        showMessage('Template not found', 'error');
+        return;
+    }
+
+    const safeName = (template.name || 'template')
+        .replace(/[^a-z0-9\-_ ]/gi, '')
+        .trim()
+        .replace(/\s+/g, '_')
+        .toLowerCase();
+
+    const fileName = `${safeName || 'template'}_${template.id}.json`;
+    const dataBlob = new Blob([JSON.stringify(template, null, 2)], { type: 'application/json' });
+
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(dataBlob);
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(link.href);
+
+    showMessage('Template exported successfully!', 'success');
 }
 
 function importTemplates(event) {

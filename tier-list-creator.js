@@ -542,8 +542,7 @@ async function loadTemplate() {
     const urlParams = new URLSearchParams(window.location.search);
     const templateId = urlParams.get('edit');
     const publicTemplate = urlParams.get('public') === 'true';
-    const templateParam = urlParams.get('template');
-    const isEditing = urlParams.get('edit') === 'true';
+    const isEditing = !!templateId;
     
     if (templateId && !publicTemplate) {
         // Load local template for editing
@@ -554,10 +553,10 @@ async function loadTemplate() {
             saveBtn.textContent = '🔄 Update Template';
             saveBtn.classList.add('update-mode');
         }
-    } else if (templateParam && publicTemplate) {
+    } else if (templateId && publicTemplate) {
         // Load public template with cache-busting
         try {
-            const template = await githubStorage.getTemplateById(templateParam);
+            const template = await githubStorage.getTemplateById(templateId);
             if (template) {
                 if (isEditing && githubStorage.authenticated && 
                     template.creator && template.creator.username === githubStorage.currentUser?.login) {
@@ -1754,18 +1753,13 @@ async function saveTemplate() {
     // Save publicly if requested
     if (sharePublicly) {
         try {
-            showMessage('Publishing template...', 'info');
             // Set the public flag on the template before saving
             const publicTemplate = { ...currentTemplate, public: true, isPublic: true };
             const result = await githubStorage.saveTemplate(publicTemplate);
+            const action = isUpdating ? 'updated' : 'saved';
             
             if (result && result.success) {
-                const action = isUpdating ? 'updated' : 'saved';
-                if (result.directCommit) {
-                    showMessage(`Template ${action} and published immediately! 🎉`, 'success');
-                } else {
-                    showMessage(`Template ${action} locally and submitted as Pull Request! 🎉`, 'success');
-                }
+                showMessage(`Template ${action} and published publicly!`, 'success');
                 if (result.pullRequestUrl) {
                     console.log('Pull Request URL:', result.pullRequestUrl);
                 }
@@ -1773,91 +1767,19 @@ async function saveTemplate() {
                     console.log('Direct commit URL:', result.commitUrl);
                 }
             } else if (result && result.local) {
-                const action = isUpdating ? 'updated' : 'saved';
-                showMessage(`Template ${action} locally! (Public sharing not available)`, 'success');
+                showMessage(`Template ${action} saved locally.`, 'success');
             } else {
-                const action = isUpdating ? 'updated' : 'saved';
-                showMessage(`Template ${action} locally and submitted to repository!`, 'success');
+                showMessage(`Template ${action} and submitted for public publish.`, 'success');
             }
         } catch (error) {
             console.error('Error submitting template:', error);
-            
-            // Only show error dialog for genuine failures, not when local save succeeded
-            if (error.message.includes('Authentication required') || error.message.includes('token')) {
-                // Authentication-related errors - suggest alternative
-                const useAlternative = confirm(
-                    `Authentication required to submit template publicly.\n\n` +
-                    'Your template has been saved locally. Would you like to download it as a JSON file for manual submission?\n\n' +
-                    'Click OK to download, or Cancel to continue.'
-                );
-                
-                if (useAlternative) {
-                    downloadTemplateAsJSON();
-                    const action = isUpdating ? 'updated' : 'saved';
-                    showMessage(`Template ${action} locally and downloaded! Check console for manual submission instructions.`, 'success');
-                    logManualSubmissionInstructions();
-                } else {
-                    const action = isUpdating ? 'updated' : 'saved';
-                    showMessage(`Template ${action} locally! (GitHub authentication required for public sharing)`, 'warning');
-                }
-            } else if (error.message.includes('fork') || error.message.includes('pull request') || error.message.includes('GitHub')) {
-                // GitHub-specific errors - offer download option
-                const useAlternative = confirm(
-                    `Failed to submit template: ${error.message}\n\n` +
-                    'Your template has been saved locally. Would you like to download it as a JSON file for manual submission?\n\n' +
-                    'Click OK to download, or Cancel to continue.'
-                );
-                
-                if (useAlternative) {
-                    downloadTemplateAsJSON();
-                    const action = isUpdating ? 'updated' : 'saved';
-                    showMessage(`Template ${action} locally and downloaded! Check console for manual submission instructions.`, 'success');
-                    logManualSubmissionInstructions();
-                } else {
-                    const action = isUpdating ? 'updated' : 'saved';
-                    showMessage(`Template ${action} locally, but failed to submit publicly: ${error.message}`, 'warning');
-                }
-            } else {
-                // Other errors - just show warning without interrupting workflow
-                const action = isUpdating ? 'updated' : 'saved';
-                showMessage(`Template ${action} locally, but public submission failed: ${error.message}`, 'warning');
-                console.error('Public submission error details:', error);
-            }
+            const action = isUpdating ? 'updated' : 'saved';
+            showMessage(`Template ${action} locally, but public publish failed.`, 'warning');
+            console.error('Public submission error details:', error);
         }
     } else {
         const action = isUpdating ? 'updated' : 'saved';
         showMessage(`Template ${action} locally!`, 'success');
-    }
-
-    // Helper function to download template as JSON
-    function downloadTemplateAsJSON() {
-        const templateData = {
-            ...currentTemplate,
-            createdAt: currentTemplate.createdAt || new Date().toISOString(),
-            public: true,
-            creator: null // No creator info since not saved via API
-        };
-        
-        const blob = new Blob([JSON.stringify(templateData, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `${currentTemplate.id}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    }
-    
-    // Helper function to log manual submission instructions
-    function logManualSubmissionInstructions() {
-        console.log('Manual submission instructions:');
-        console.log('1. Go to https://github.com/FreePirat/Tiermaker2');
-        console.log('2. Click "Fork" to create your own copy');
-        console.log('3. In your fork, go to the "templates" folder');
-        console.log('4. Click "Add file" > "Upload files"');
-        console.log('5. Upload the downloaded JSON file');
-        console.log('6. Create a Pull Request back to the main repository');
     }
     
     // Redirect after short delay
