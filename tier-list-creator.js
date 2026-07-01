@@ -23,6 +23,56 @@ let currentTemplate = {
     images: []
 };
 
+function extractImagesFromTiers(tiers) {
+    if (!Array.isArray(tiers)) {
+        return [];
+    }
+
+    const seen = new Set();
+    const images = [];
+
+    tiers.forEach(tier => {
+        (tier.items || []).forEach(item => {
+            if (!item || !item.src || seen.has(item.src)) {
+                return;
+            }
+
+            seen.add(item.src);
+            images.push({
+                src: item.src,
+                name: item.name || 'Image',
+                position: 'tier',
+                timestamp: item.timestamp || Date.now()
+            });
+        });
+    });
+
+    return images;
+}
+
+function normalizeLocalTemplate(template) {
+    const normalized = { ...template };
+    let changed = false;
+
+    if ((!Array.isArray(normalized.images) || normalized.images.length === 0) && Array.isArray(normalized.tiers)) {
+        const inferredImages = extractImagesFromTiers(normalized.tiers);
+        if (inferredImages.length > 0) {
+            normalized.images = inferredImages;
+            changed = true;
+        }
+    }
+
+    const hasCreator = !!(normalized.creator && normalized.creator.username);
+    const isExplicitPublicSource = normalized.source === 'public';
+    if (!hasCreator && !isExplicitPublicSource && (normalized.isPublic || normalized.public)) {
+        normalized.isPublic = false;
+        normalized.public = false;
+        changed = true;
+    }
+
+    return { normalized, changed };
+}
+
 // Get default color for tier labels
 function getDefaultTierColor(label) {
     const defaultColors = {
@@ -268,6 +318,17 @@ async function initializeStorage() {
         if (window.TemplateStorage && typeof window.TemplateStorage.loadTemplates === 'function') {
             templates = await window.TemplateStorage.loadTemplates();
             templates = Array.isArray(templates) ? templates : [];
+
+            let repaired = false;
+            templates = templates.map(template => {
+                const result = normalizeLocalTemplate(template);
+                repaired = repaired || result.changed;
+                return result.normalized;
+            });
+
+            if (repaired) {
+                await saveTemplatesWithOptimization(templates);
+            }
         } else if (typeof(Storage) !== "undefined") {
             templates = JSON.parse(localStorage.getItem('tierTemplates')) || [];
         } else {
@@ -573,6 +634,15 @@ async function loadTemplate() {
                     saveBtn.textContent = '✅ Save as New Template';
                     saveBtn.classList.add('copy-mode');
                 }
+            } else {
+                // Fallback for templates incorrectly flagged as public in local storage.
+                const localTemplate = templates.find(t => t.id === templateId);
+                if (localTemplate) {
+                    loadTemplateData(localTemplate, false, true);
+                    const saveBtn = document.querySelector('.save-btn');
+                    saveBtn.textContent = '🔄 Update Template';
+                    saveBtn.classList.add('update-mode');
+                }
             }
         } catch (error) {
             console.error('Error loading public template:', error);
@@ -607,6 +677,11 @@ function loadTemplateData(template, isPublicCopy = false, isEditing = false) {
     // Set public sharing checkbox based on template status
     if (template.isPublic || template.public) {
         document.getElementById('share-publicly').checked = isEditing; // Only check if editing existing public template
+    }
+
+    // Recover image metadata for older templates where images were not persisted.
+    if (!Array.isArray(currentTemplate.images) || currentTemplate.images.length === 0) {
+        currentTemplate.images = extractImagesFromTiers(currentTemplate.tiers);
     }
     
     // Load tier structure
@@ -1498,11 +1573,37 @@ function updateTemplateState() {
             items: items
         });
     });
+
+    // Keep image list consistent with current DOM to ensure updates persist all images.
+    currentTemplate.images = collectImagesFromDOM();
     
     // Apply auto-resize to all existing tier labels with a delay to ensure DOM has updated
     setTimeout(() => {
         document.querySelectorAll('.tier-label').forEach(autoResizeTierLabel);
     }, 50); // Small delay to ensure tier row heights have updated after image movement
+}
+
+function collectImagesFromDOM() {
+    const images = [];
+    const seen = new Set();
+
+    document.querySelectorAll('.tier-item').forEach(item => {
+        const img = item.querySelector('img');
+        if (!img || !img.src || seen.has(img.src)) {
+            return;
+        }
+
+        seen.add(img.src);
+        const isInPool = !!item.closest('.image-pool-container');
+        images.push({
+            src: img.src,
+            name: img.alt || 'Image',
+            position: isInPool ? 'pool' : 'tier',
+            timestamp: item.getAttribute('data-timestamp') || Date.now()
+        });
+    });
+
+    return images;
 }
 
 // Update all tier label text sizes based on their content and available space
@@ -1720,9 +1821,11 @@ async function saveTemplate() {
     }
     
     // Mark template as public if sharing publicly
-    if (sharePublicly) {
-        currentTemplate.public = true;
-        currentTemplate.isPublic = true;
+    // Keep local/public status explicit so old flags do not stick across updates.
+    currentTemplate.public = !!sharePublicly;
+    currentTemplate.isPublic = !!sharePublicly;
+    if (!sharePublicly) {
+        delete currentTemplate.source;
     }
 
     // Save locally first
@@ -1759,6 +1862,21 @@ async function saveTemplate() {
             const action = isUpdating ? 'updated' : 'saved';
             
             if (result && result.success) {
+                currentTemplate.source = 'public';
+                if (githubStorage.currentUser) {
+                    currentTemplate.creator = {
+                        username: githubStorage.currentUser.login,
+                        avatarUrl: githubStorage.currentUser.avatar_url,
+                        profileUrl: githubStorage.currentUser.html_url
+                    };
+                }
+
+                const persistedIndex = templates.findIndex(t => t.id === currentTemplate.id);
+                if (persistedIndex >= 0) {
+                    templates[persistedIndex] = { ...currentTemplate };
+                    await saveTemplatesWithOptimization(templates);
+                }
+
                 showMessage(`Template ${action} and published publicly!`, 'success');
                 if (result.pullRequestUrl) {
                     console.log('Pull Request URL:', result.pullRequestUrl);
@@ -1774,7 +1892,17 @@ async function saveTemplate() {
         } catch (error) {
             console.error('Error submitting template:', error);
             const action = isUpdating ? 'updated' : 'saved';
-            showMessage(`Template ${action} locally, but public publish failed.`, 'warning');
+            currentTemplate.public = false;
+            currentTemplate.isPublic = false;
+            delete currentTemplate.source;
+
+            const persistedIndex = templates.findIndex(t => t.id === currentTemplate.id);
+            if (persistedIndex >= 0) {
+                templates[persistedIndex] = { ...currentTemplate };
+                await saveTemplatesWithOptimization(templates);
+            }
+
+            showMessage(`Template ${action} locally. Public publish could not be confirmed right now.`, 'warning');
             console.error('Public submission error details:', error);
         }
     } else {

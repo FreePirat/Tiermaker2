@@ -3,6 +3,56 @@
 let templates = [];
 let templateToDelete = null;
 
+function extractImagesFromTiers(tiers) {
+    if (!Array.isArray(tiers)) {
+        return [];
+    }
+
+    const seen = new Set();
+    const images = [];
+
+    tiers.forEach(tier => {
+        (tier.items || []).forEach(item => {
+            if (!item || !item.src || seen.has(item.src)) {
+                return;
+            }
+
+            seen.add(item.src);
+            images.push({
+                src: item.src,
+                name: item.name || 'Image',
+                position: 'tier',
+                timestamp: item.timestamp || Date.now()
+            });
+        });
+    });
+
+    return images;
+}
+
+function normalizeLocalTemplate(template) {
+    const normalized = { ...template };
+    let changed = false;
+
+    if ((!Array.isArray(normalized.images) || normalized.images.length === 0) && Array.isArray(normalized.tiers)) {
+        const inferredImages = extractImagesFromTiers(normalized.tiers);
+        if (inferredImages.length > 0) {
+            normalized.images = inferredImages;
+            changed = true;
+        }
+    }
+
+    const hasCreator = !!(normalized.creator && normalized.creator.username);
+    const isExplicitPublicSource = normalized.source === 'public';
+    if (!hasCreator && !isExplicitPublicSource && (normalized.isPublic || normalized.public)) {
+        normalized.isPublic = false;
+        normalized.public = false;
+        changed = true;
+    }
+
+    return { normalized, changed };
+}
+
 // Advanced localStorage operations with storage management
 async function saveTemplates() {
     try {
@@ -90,6 +140,17 @@ async function loadTemplates() {
         if (window.TemplateStorage && typeof window.TemplateStorage.loadTemplates === 'function') {
             templates = await window.TemplateStorage.loadTemplates();
             templates = Array.isArray(templates) ? templates : [];
+
+            let repaired = false;
+            templates = templates.map(template => {
+                const result = normalizeLocalTemplate(template);
+                repaired = repaired || result.changed;
+                return result.normalized;
+            });
+
+            if (repaired) {
+                await saveTemplatesWithOptimization(templates);
+            }
         } else if (typeof(Storage) !== "undefined") {
             templates = JSON.parse(localStorage.getItem('tierTemplates')) || [];
         } else {
@@ -125,10 +186,10 @@ function renderTemplates() {
 }
 
 function createTemplateCard(template) {
-    const previewTiers = template.tiers.slice(0, 5); // Show max 5 tiers in preview
-    const imageCount = template.images.length;
-    const tierCount = template.tiers.length;
+    const imageCount = Array.isArray(template.images) ? template.images.length : 0;
+    const tierCount = Array.isArray(template.tiers) ? template.tiers.length : 0;
     const createdDate = new Date(parseInt(template.id.split('_')[1])).toLocaleDateString();
+    const isGitHubPublicTemplate = !!(template.isPublic && (template.source === 'public' || (template.creator && template.creator.username)));
     
     // Use template thumbnail if available, otherwise fallback to first image or placeholder
     const thumbnailImage = template.thumbnail 
@@ -149,28 +210,10 @@ function createTemplateCard(template) {
                     <div class="template-stats">
                         <span>📸 ${imageCount} images</span>
                         <span>📊 ${tierCount} tiers</span>
-                        ${template.isPublic ? '<span class="public-badge">🌐 Public</span>' : '<span class="local-badge">💾 Local</span>'}
+                        ${isGitHubPublicTemplate ? '<span class="public-badge">🌐 Public</span>' : '<span class="local-badge">💾 Local</span>'}
                     </div>
                 </div>
             </div>
-            ${template.isPublic ? `
-                <div class="template-preview">
-                    ${previewTiers.map(tier => `
-                        <div class="tier-preview">
-                            <div class="tier-label-preview">${tier.label}</div>
-                            <div class="tier-items-preview">
-                                ${tier.items.slice(0, 8).map(item => `
-                                    <div class="tier-item-preview">
-                                        <img src="${item.src}" alt="${item.name}">
-                                    </div>
-                                `).join('')}
-                                ${tier.items.length > 8 ? `<span style="color: #aaa; font-size: 10px; margin-left: 5px;">+${tier.items.length - 8}</span>` : ''}
-                            </div>
-                        </div>
-                    `).join('')}
-                    ${template.tiers.length > 5 ? `<div style="color: #aaa; font-size: 12px; text-align: center; margin-top: 5px;">+${template.tiers.length - 5} more tiers</div>` : ''}
-                </div>
-            ` : ''}
             
             <div class="template-info">
                 <div class="template-meta">
@@ -179,7 +222,7 @@ function createTemplateCard(template) {
                 </div>
                 
                 <div class="template-actions">
-                    <a href="create-template.html?edit=${encodeURIComponent(template.id)}${template.isPublic ? '&public=true' : ''}" class="action-btn edit-btn">
+                    <a href="create-template.html?edit=${encodeURIComponent(template.id)}${isGitHubPublicTemplate ? '&public=true' : ''}" class="action-btn edit-btn">
                         ✏️ Update Template
                     </a>
                     <button class="action-btn duplicate-btn" onclick="exportTemplate('${template.id}')">

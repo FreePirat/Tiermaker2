@@ -363,21 +363,67 @@ class GitHubStorage {
             }
         });
 
-        if (!response.ok) {
-            if (response.status === 403) {
-                throw new Error('Permission denied: Your GitHub token needs "public_repo" scope to fork repositories.');
-            }
-            const errorData = await response.json();
-            throw new Error(`Failed to create fork: ${errorData.message}`);
+        if (response.ok) {
+            const fork = await response.json();
+            console.log('Fork created successfully:', fork.html_url);
+            await this.waitForForkReady(fork.owner?.login);
+            return fork;
         }
 
-        const fork = await response.json();
-        console.log('Fork created successfully:', fork.html_url);
-        
-        // Wait a moment for the fork to be ready
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        return fork;
+        if (response.status === 422 && this.currentUser?.login) {
+            // Fork may already exist for this user. Reuse it instead of failing publish.
+            const existingForkResponse = await fetch(
+                `${this.apiBase}/repos/${this.currentUser.login}/${this.repo}`,
+                {
+                    headers: {
+                        'Authorization': `token ${this.accessToken}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                }
+            );
+
+            if (existingForkResponse.ok) {
+                const existingFork = await existingForkResponse.json();
+                console.log('Reusing existing fork:', existingFork.html_url);
+                await this.waitForForkReady(existingFork.owner?.login);
+                return existingFork;
+            }
+        }
+
+        if (response.status === 403) {
+            throw new Error('Permission denied: Your GitHub token needs "public_repo" scope to fork repositories.');
+        }
+
+        const errorData = await response.json();
+        throw new Error(`Failed to create fork: ${errorData.message}`);
+    }
+
+    async waitForForkReady(forkOwner, maxAttempts = 10, delayMs = 1500) {
+        if (!forkOwner) {
+            return;
+        }
+
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            try {
+                const response = await fetch(
+                    `${this.apiBase}/repos/${forkOwner}/${this.repo}`,
+                    {
+                        headers: {
+                            'Authorization': `token ${this.accessToken}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    }
+                );
+
+                if (response.ok) {
+                    return;
+                }
+            } catch (error) {
+                console.warn('Fork readiness check failed, retrying:', error);
+            }
+
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
     }
 
     // Create or update template file in the user's fork
@@ -594,6 +640,26 @@ ${isUpdate ? `This is an update to an existing template with new content.
             
             // Enhanced error handling for validation failures
             if (response.status === 422) {
+                if (errorData.message && errorData.message.includes('A pull request already exists')) {
+                    const existingResponse = await fetch(
+                        `${this.apiBase}/repos/${this.owner}/${this.repo}/pulls?state=open&head=${encodeURIComponent(`${forkOwner}:${this.branch}`)}&base=${encodeURIComponent(this.branch)}`,
+                        {
+                            headers: {
+                                'Authorization': `token ${this.accessToken}`,
+                                'Accept': 'application/vnd.github.v3+json'
+                            }
+                        }
+                    );
+
+                    if (existingResponse.ok) {
+                        const pulls = await existingResponse.json();
+                        if (Array.isArray(pulls) && pulls.length > 0) {
+                            console.log('Reusing existing PR:', pulls[0].html_url);
+                            return pulls[0];
+                        }
+                    }
+                }
+
                 if (errorData.errors && errorData.errors.length > 0) {
                     const validationErrors = errorData.errors.map(err => `${err.field}: ${err.message || err.code}`).join(', ');
                     errorMessage = `Validation Failed: ${validationErrors}`;
