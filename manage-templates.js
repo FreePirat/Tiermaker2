@@ -395,15 +395,25 @@ function importTemplates(event) {
     const reader = new FileReader();
     reader.onload = async function(e) {
         try {
-            const importedTemplates = JSON.parse(e.target.result);
-            
-            if (!Array.isArray(importedTemplates)) {
+            const parsedData = JSON.parse(e.target.result);
+
+            // Accept either a single exported template object or an array of templates.
+            let importedTemplates;
+            if (Array.isArray(parsedData)) {
+                importedTemplates = parsedData;
+            } else if (parsedData && typeof parsedData === 'object') {
+                if (Array.isArray(parsedData.templates)) {
+                    importedTemplates = parsedData.templates;
+                } else {
+                    importedTemplates = [parsedData];
+                }
+            } else {
                 throw new Error('Invalid file format');
             }
             
             // Validate template structure
             const validTemplates = importedTemplates.filter(template => {
-                return template.id && template.name && template.tiers && template.images;
+                return template && template.id && template.name && Array.isArray(template.tiers) && Array.isArray(template.images);
             });
             
             if (validTemplates.length === 0) {

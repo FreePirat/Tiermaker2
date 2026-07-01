@@ -15,6 +15,22 @@ class GitHubStorage {
         this.repoWriteAccess = null;
     }
 
+    encodeBase64Utf8(content) {
+        const text = String(content ?? '');
+
+        if (typeof TextEncoder !== 'undefined') {
+            const bytes = new TextEncoder().encode(text);
+            let binary = '';
+            bytes.forEach(byte => {
+                binary += String.fromCharCode(byte);
+            });
+            return btoa(binary);
+        }
+
+        // Fallback for very old environments.
+        return btoa(unescape(encodeURIComponent(text)));
+    }
+
     // Initialize GitHub authentication
     async initAuth() {
         // Check if user has stored auth token
@@ -429,7 +445,7 @@ class GitHubStorage {
     // Create or update template file in the user's fork
     async createFileInFork(filename, templateData, forkOwner) {
         const filePath = `${this.templatesPath}/${filename}`;
-        const content = btoa(JSON.stringify(templateData, null, 2));
+        const content = this.encodeBase64Utf8(JSON.stringify(templateData, null, 2));
         
         let sha = null;
         let action = 'Add';
@@ -1301,7 +1317,7 @@ The template file \`${templateId}.json\` has been removed from the fork and this
             
             const commitData = {
                 message: message,
-                content: btoa(content),
+                content: this.encodeBase64Utf8(content),
                 branch: this.branch
             };
             
