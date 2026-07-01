@@ -601,7 +601,8 @@ function handleColorChange(event) {
 // Load template if editing
 async function loadTemplate() {
     const urlParams = new URLSearchParams(window.location.search);
-    const templateId = urlParams.get('edit');
+    // Support legacy public links that used ?template=<id>&public=true.
+    const templateId = urlParams.get('edit') || urlParams.get('template');
     const publicTemplate = urlParams.get('public') === 'true';
     const isEditing = !!templateId;
     
@@ -1892,17 +1893,38 @@ async function saveTemplate() {
         } catch (error) {
             console.error('Error submitting template:', error);
             const action = isUpdating ? 'updated' : 'saved';
-            currentTemplate.public = false;
-            currentTemplate.isPublic = false;
-            delete currentTemplate.source;
+            const errorText = String(error?.message || '').toLowerCase();
+            const alreadyPublished =
+                errorText.includes('no changes detected') ||
+                errorText.includes('already exists') ||
+                errorText.includes('already up to date');
 
-            const persistedIndex = templates.findIndex(t => t.id === currentTemplate.id);
-            if (persistedIndex >= 0) {
-                templates[persistedIndex] = { ...currentTemplate };
-                await saveTemplatesWithOptimization(templates);
+            if (alreadyPublished) {
+                currentTemplate.public = true;
+                currentTemplate.isPublic = true;
+                currentTemplate.source = 'public';
+
+                const persistedIndex = templates.findIndex(t => t.id === currentTemplate.id);
+                if (persistedIndex >= 0) {
+                    templates[persistedIndex] = { ...currentTemplate };
+                    await saveTemplatesWithOptimization(templates);
+                }
+
+                showMessage(`Template ${action} publicly (already up to date).`, 'success');
+            } else {
+                currentTemplate.public = false;
+                currentTemplate.isPublic = false;
+                delete currentTemplate.source;
+
+                const persistedIndex = templates.findIndex(t => t.id === currentTemplate.id);
+                if (persistedIndex >= 0) {
+                    templates[persistedIndex] = { ...currentTemplate };
+                    await saveTemplatesWithOptimization(templates);
+                }
+
+                showMessage(`Template ${action} locally. GitHub publish request failed.`, 'warning');
             }
 
-            showMessage(`Template ${action} locally. Public publish could not be confirmed right now.`, 'warning');
             console.error('Public submission error details:', error);
         }
     } else {
